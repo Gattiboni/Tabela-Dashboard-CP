@@ -90,6 +90,16 @@
     }
 
     // Função principal de renderização
+    // Inicia vazio
+    drawTable([]);
+
+// TESTE LOCAL - remova depois de testar!
+    drawTable([
+      { "Classificação": "Fixo", "Descrição do Fornecedor/Cliente": "Empresa A", "Fornecedor/Cliente": "01", "VENCIDO": "R$ 1.000", "24/06": "R$ 500", "25/06": "R$ 500" },
+      { "Classificação": "Fixo", "Descrição do Fornecedor/Cliente": "Empresa B", "Fornecedor/Cliente": "02", "VENCIDO": "R$ 2.000", "24/06": "R$ 800", "25/06": "R$ 1.200" },
+      { "Classificação": "Variável", "Descrição do Fornecedor/Cliente": "Empresa C", "Fornecedor/Cliente": "03", "VENCIDO": "R$ 500", "24/06": "R$ 200", "25/06": "R$ 300" }
+]);
+
     function drawTable(dadosOriginais) {
       if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) return;
 
