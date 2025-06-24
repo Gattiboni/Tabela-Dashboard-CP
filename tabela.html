@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Tabela Financeira Teste</title>
+  <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
+</head>
+<body>
+  <h2>Tabela Financeira (Tabulator)</h2>
+  <div id="tabela"></div>
+  <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
+  <script>
+    // Dados de exemplo igual Appsmith
+    const dados = [
+      {
+        "expandCol": "",
+        "Classificação": "",
+        "Descrição do Fornecedor/Cliente": "",
+        "Fornecedor/Cliente": "",
+        "VENCIDO": "R$ 2.735.346",
+        "24/06": "",
+        "25/06": "R$ 15.000",
+        "26/06": "",
+        "27/06": "R$ 1.000"
+      },
+      {
+        "expandCol": "−",
+        "Classificação": "FIXO",
+        "Descrição do Fornecedor/Cliente": "",
+        "Fornecedor/Cliente": "",
+        "VENCIDO": "",
+        "24/06": "",
+        "25/06": "",
+        "26/06": "",
+        "27/06": ""
+      },
+      {
+        "expandCol": "",
+        "Classificação": "",
+        "Descrição do Fornecedor/Cliente": "COELBA",
+        "Fornecedor/Cliente": "COELBA",
+        "VENCIDO": "R$ 75.000",
+        "24/06": "",
+        "25/06": "R$ 5.000",
+        "26/06": "",
+        "27/06": ""
+      },
+      {
+        "expandCol": "",
+        "Classificação": "",
+        "Descrição do Fornecedor/Cliente": "VIVO S.A.",
+        "Fornecedor/Cliente": "VIVO S.A.",
+        "VENCIDO": "",
+        "24/06": "",
+        "25/06": "R$ 10.000",
+        "26/06": "",
+        "27/06": "R$ 1.000"
+      }
+    ];
+
+    // Gera colunas dinâmicas baseado nos campos do primeiro objeto
+    const columns = Object.keys(dados[0]).map(key => {
+      // Exemplo: coluna especial para expandCol, deixa mais estreita e sem título
+      if (key === "expandCol") {
+        return {title: "+", field: "expandCol", width: 40, hozAlign:"center"};
+      }
+      // Demais colunas
+      return {title: key, field: key, width: (key.match(/^\d{2}\/\d{2}/) ? 85 : 150)};
+    });
+
+    // Monta a tabela
+    new Tabulator("#tabela", {
+      data: dados,
+      columns: columns,
+      layout:"fitDataStretch",
+      movableColumns: true,
+      resizableRows: false,
+      height:"400px"
+    });
+  </script>
+</body>
+</html>
