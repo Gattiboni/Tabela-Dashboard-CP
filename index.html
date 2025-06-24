@@ -66,7 +66,7 @@
             }
           });
           maxWidth = Math.ceil(maxWidth + 24);
-          maxWidth = Math.max(110, Math.min(maxWidth, 190)); // Agora comporta "R$ 1.234.567"
+          maxWidth = Math.max(110, Math.min(maxWidth, 190));
           return {
             title: key,
             field: key,
@@ -118,7 +118,7 @@
         row["Classificação"] !== undefined &&
         row["Classificação"] !== null &&
         row["Classificação"].toString().trim() !== ""
-      ).map(row => ({ ...row })); // Clone
+      ).map(row => ({ ...row }));
 
       // Linha de totais
       const linhaTotais = calcularLinhaTotais(dados);
@@ -159,28 +159,20 @@
       });
       window.table.setLocale("pt-br");
 
-      // --- Scroll horizontal sincronizado no topo ---
+      // --- Scroll horizontal sincronizado no topo (versão robusta) ---
       setTimeout(() => {
         const tabelaDiv = document.querySelector("#tabela .tabulator-tableholder");
         const scrollTopTab = document.getElementById("scrollTopTab");
         const scrollSyncTab = document.getElementById("scrollSyncTab");
         if (tabelaDiv && scrollTopTab && scrollSyncTab) {
-          // Atualiza largura do fake div pra bater com a grid real
           scrollSyncTab.style.width = tabelaDiv.scrollWidth + "px";
-          // Remove listeners antigos
-          tabelaDiv.removeEventListener("scroll", syncScroll);
-          scrollTopTab.removeEventListener("scroll", syncTable);
-          // Define listeners novos
-          tabelaDiv.addEventListener("scroll", syncScroll);
-          scrollTopTab.addEventListener("scroll", syncTable);
-        }
-        function syncScroll() {
-          scrollTopTab.scrollLeft = tabelaDiv.scrollLeft;
-        }
-        function syncTable() {
+          tabelaDiv.onscroll = null;
+          scrollTopTab.onscroll = null;
+          tabelaDiv.onscroll = () => { scrollTopTab.scrollLeft = tabelaDiv.scrollLeft; };
+          scrollTopTab.onscroll = () => { tabelaDiv.scrollLeft = scrollTopTab.scrollLeft; };
           tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
         }
-      }, 200);
+      }, 600);
     }
 
     // Inicia vazio
