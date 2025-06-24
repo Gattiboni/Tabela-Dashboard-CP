@@ -2,81 +2,78 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <title>Tabela Financeira Teste</title>
+  <title>Tabela Financeira (Tabulator)</title>
   <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    #tabela { margin-top: 20px; }
+  </style>
 </head>
 <body>
   <h2>Tabela Financeira (Tabulator)</h2>
   <div id="tabela"></div>
+
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Dados de exemplo igual Appsmith
-    const dados = [
-      {
-        "expandCol": "",
-        "Classificação": "",
-        "Descrição do Fornecedor/Cliente": "",
-        "Fornecedor/Cliente": "",
-        "VENCIDO": "R$ 2.735.346",
-        "24/06": "",
-        "25/06": "R$ 15.000",
-        "26/06": "",
-        "27/06": "R$ 1.000"
-      },
-      {
-        "expandCol": "−",
-        "Classificação": "FIXO",
-        "Descrição do Fornecedor/Cliente": "",
-        "Fornecedor/Cliente": "",
-        "VENCIDO": "",
-        "24/06": "",
-        "25/06": "",
-        "26/06": "",
-        "27/06": ""
-      },
-      {
-        "expandCol": "",
-        "Classificação": "",
-        "Descrição do Fornecedor/Cliente": "COELBA",
-        "Fornecedor/Cliente": "COELBA",
-        "VENCIDO": "R$ 75.000",
-        "24/06": "",
-        "25/06": "R$ 5.000",
-        "26/06": "",
-        "27/06": ""
-      },
-      {
-        "expandCol": "",
-        "Classificação": "",
-        "Descrição do Fornecedor/Cliente": "VIVO S.A.",
-        "Fornecedor/Cliente": "VIVO S.A.",
-        "VENCIDO": "",
-        "24/06": "",
-        "25/06": "R$ 10.000",
-        "26/06": "",
-        "27/06": "R$ 1.000"
-      }
-    ];
+    // Função para desenhar a tabela
+    function drawTable(dados) {
+      if (!dados || !Array.isArray(dados) || dados.length === 0) return;
 
-    // Gera colunas dinâmicas baseado nos campos do primeiro objeto
-    const columns = Object.keys(dados[0]).map(key => {
-      // Exemplo: coluna especial para expandCol, deixa mais estreita e sem título
-      if (key === "expandCol") {
-        return {title: "+", field: "expandCol", width: 40, hozAlign:"center"};
-      }
-      // Demais colunas
-      return {title: key, field: key, width: (key.match(/^\d{2}\/\d{2}/) ? 85 : 150)};
-    });
+      // Gera colunas dinâmicas baseado nas chaves do primeiro objeto
+      const columns = Object.keys(dados[0]).map(key => {
+        if (key === "expandCol") {
+          return { title: "+", field: key, width: 40, hozAlign: "center", headerSort: false };
+        }
+        // Colunas de datas ficam mais estreitas
+        if (key.match(/^\d{2}\/\d{2}/)) {
+          return { title: key, field: key, width: 85, hozAlign: "center" };
+        }
+        // Demais colunas
+        return { title: key, field: key, width: 150 };
+      });
 
-    // Monta a tabela
-    new Tabulator("#tabela", {
-      data: dados,
-      columns: columns,
-      layout:"fitDataStretch",
-      movableColumns: true,
-      resizableRows: false,
-      height:"400px"
-    });
+      // Destroi tabela antiga se houver (para atualização dinâmica)
+      if (window.table) {
+        window.table.setData([]); // Limpa dados
+        window.table.destroy();
+      }
+
+      // Cria tabela Tabulator
+      window.table = new Tabulator("#tabela", {
+        data: dados,
+        columns: columns,
+        layout: "fitDataStretch",
+        movableColumns: true,
+        resizableRows: false,
+        height: "auto",
+        placeholder: "Nenhum dado encontrado.",
+        langs: {
+          "pt-br": {
+            "columns": {},
+            "data": { "loading": "Carregando...", "error": "Erro nos dados!" }
+          }
+        }
+      });
+      window.table.setLocale("pt-br");
+    }
+
+    // Inicializa com dados vazios (opcional)
+    drawTable([]);
+
+    // Recebe dados via postMessage (do Appsmith)
+    window.addEventListener("message", function(event) {
+      try {
+        // Se quiser restringir, valide event.origin
+        // if(event.origin !== "https://seu-appsmith.com") return;
+        let data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        // Espera um array de objetos como o do Appsmith
+        if (Array.isArray(data)) {
+          drawTable(data);
+        }
+      } catch(e) {
+        console.error("Erro ao processar dados recebidos:", e);
+      }
+    }, false);
   </script>
 </body>
 </html>
