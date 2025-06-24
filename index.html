@@ -6,7 +6,9 @@
   <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; background: #faf9f6; }
-    #tabela { margin-top: 20px; }
+    #scrollTopTab { overflow-x: auto; width: 100%; height: 16px; margin-bottom: 4px; }
+    #scrollSyncTab { height: 1px; }
+    #tabela { margin-top: 0px; }
     .tabulator .tabulator-group {
       background: #e3e6ed;
       font-weight: bold;
@@ -19,6 +21,10 @@
 </head>
 <body>
   <h2>Tabela Detalhamento</h2>
+  <!-- Scroll horizontal topo -->
+  <div id="scrollTopTab">
+    <div id="scrollSyncTab" style="width: 3000px; height: 1px;"></div>
+  </div>
   <div id="tabela"></div>
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
@@ -31,7 +37,7 @@
       return ctx.measureText(text).width;
     }
 
-    // Função para formatar número como moeda (R$ X.XXX)
+    // Formatter: moeda sem casas decimais
     function moedaBRLSemCentavos(cell) {
       const value = cell.getValue();
       if (typeof value !== "number" || isNaN(value)) return "";
@@ -43,22 +49,24 @@
       });
     }
 
-    // Gera colunas dinamicamente, já aplicando formatter de moeda e escondendo "Fornecedor/Cliente"
+    // Colunas dinâmicas + formatter + oculta "Fornecedor/Cliente"
     function gerarColunasDinamicas(dados) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
       return Object.keys(dados[0]).map(key => {
-        if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false }; // Esconde coluna
+        if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false };
         if (key.match(/^\d{2}\/\d{2}/) || key === "VENCIDO") {
           let maxWidth = calcTextWidth(key, font);
           dados.forEach(row => {
-            if (row[key]) {
-              const w = calcTextWidth(String(row[key]), font);
+            let val = row[key];
+            if (typeof val === "number") val = val.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+            if (val) {
+              const w = calcTextWidth(String(val), font);
               if (w > maxWidth) maxWidth = w;
             }
           });
-          maxWidth = Math.ceil(maxWidth + 20);
-          maxWidth = Math.max(65, Math.min(maxWidth, 130));
+          maxWidth = Math.ceil(maxWidth + 24);
+          maxWidth = Math.max(110, Math.min(maxWidth, 190)); // Agora comporta "R$ 1.234.567"
           return {
             title: key,
             field: key,
@@ -72,7 +80,7 @@
       });
     }
 
-    // Função para parse seguro na linha de totais
+    // Soma segura para totais
     function valorNumerico(str) {
       if (typeof str === "number") return str;
       if (!str) return 0;
@@ -84,7 +92,7 @@
       ) || 0;
     }
 
-    // Gera linha de totais (primeira linha), só valores (number)
+    // Linha de totais (primeira linha)
     function calcularLinhaTotais(dados) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
       const primeira = dados[0];
@@ -105,14 +113,14 @@
 
     function drawTable(dadosOriginais) {
       if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) return;
-      // Remove linhas sem "Classificação" (sujeira)
+      // Remove linhas sem "Classificação"
       let dados = dadosOriginais.filter(row =>
         row["Classificação"] !== undefined &&
         row["Classificação"] !== null &&
         row["Classificação"].toString().trim() !== ""
-      ).map(row => ({ ...row })); // Clone para evitar bugs
+      ).map(row => ({ ...row })); // Clone
 
-      // Calcula linha de totais (primeira linha)
+      // Linha de totais
       const linhaTotais = calcularLinhaTotais(dados);
       dados.unshift(linhaTotais);
 
@@ -150,6 +158,29 @@
         }
       });
       window.table.setLocale("pt-br");
+
+      // --- Scroll horizontal sincronizado no topo ---
+      setTimeout(() => {
+        const tabelaDiv = document.querySelector("#tabela .tabulator-tableholder");
+        const scrollTopTab = document.getElementById("scrollTopTab");
+        const scrollSyncTab = document.getElementById("scrollSyncTab");
+        if (tabelaDiv && scrollTopTab && scrollSyncTab) {
+          // Atualiza largura do fake div pra bater com a grid real
+          scrollSyncTab.style.width = tabelaDiv.scrollWidth + "px";
+          // Remove listeners antigos
+          tabelaDiv.removeEventListener("scroll", syncScroll);
+          scrollTopTab.removeEventListener("scroll", syncTable);
+          // Define listeners novos
+          tabelaDiv.addEventListener("scroll", syncScroll);
+          scrollTopTab.addEventListener("scroll", syncTable);
+        }
+        function syncScroll() {
+          scrollTopTab.scrollLeft = tabelaDiv.scrollLeft;
+        }
+        function syncTable() {
+          tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
+        }
+      }, 200);
     }
 
     // Inicia vazio
