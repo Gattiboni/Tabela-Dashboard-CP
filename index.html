@@ -11,7 +11,6 @@
       background: #e3e6ed;
       font-weight: bold;
     }
-    /* Destaca a linha de totais */
     .linha-totais {
       background: #f6e6b3 !important;
       font-weight: bold;
@@ -52,20 +51,14 @@
       });
     }
 
-    // Função que retorna um objeto "linha de totais" (sem label, só valores)
     function calcularLinhaTotais(dados) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
       const primeira = dados[0];
       const keys = Object.keys(primeira);
-
-      // Detecta colunas datas (ex: "24/06", "25/06") e "VENCIDO"
       const colDatas = keys.filter(k => /^\d{2}\/\d{2}/.test(k));
       const colVencido = keys.find(k => k.toUpperCase().includes("VENCIDO"));
-
       const total = {};
       keys.forEach(k => total[k] = "");
-
-      // Somatórios só nas colunas de interesse
       if (colVencido) {
         total[colVencido] = dados.reduce((acc, row) => acc + parseFloat(
           (row[colVencido] || "0").toString().replace(/[^\d,.\-]/g, "").replace(",", ".")), 0);
@@ -74,48 +67,26 @@
         total[c] = dados.reduce((acc, row) => acc + parseFloat(
           (row[c] || "0").toString().replace(/[^\d,.\-]/g, "").replace(",", ".")), 0);
       });
-
-      // Formata como moeda/decimal se necessário (exemplo: 2 casas)
       if (colVencido && !isNaN(total[colVencido])) {
         total[colVencido] = total[colVencido] === 0 ? "" : total[colVencido].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
       }
       colDatas.forEach(c => {
         if (!isNaN(total[c])) total[c] = total[c] === 0 ? "" : total[c].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
       });
-
-      // Opcional: pode setar um campo especial pra identificar a linha (ajuda no rowFormatter)
       total["__isTotal"] = true;
-
       return total;
     }
 
-    // Função principal de renderização
-    // Inicia vazio
-    drawTable([]);
-
-// TESTE LOCAL - remova depois de testar!
-    drawTable([
-      { "Classificação": "Fixo", "Descrição do Fornecedor/Cliente": "Empresa A", "Fornecedor/Cliente": "01", "VENCIDO": "R$ 1.000", "24/06": "R$ 500", "25/06": "R$ 500" },
-      { "Classificação": "Fixo", "Descrição do Fornecedor/Cliente": "Empresa B", "Fornecedor/Cliente": "02", "VENCIDO": "R$ 2.000", "24/06": "R$ 800", "25/06": "R$ 1.200" },
-      { "Classificação": "Variável", "Descrição do Fornecedor/Cliente": "Empresa C", "Fornecedor/Cliente": "03", "VENCIDO": "R$ 500", "24/06": "R$ 200", "25/06": "R$ 300" }
-]);
-
     function drawTable(dadosOriginais) {
       if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) return;
-
-      // Cópia do array, não altera original
       let dados = JSON.parse(JSON.stringify(dadosOriginais));
-      // Calcula totais
       const linhaTotais = calcularLinhaTotais(dados);
-      dados.unshift(linhaTotais); // insere totals no topo
-
+      dados.unshift(linhaTotais);
       const columns = gerarColunasDinamicas(dados);
-
       if (window.table) {
-        window.table.setData([]); // Limpa dados
+        window.table.setData([]);
         window.table.destroy();
       }
-
       window.table = new Tabulator("#tabela", {
         data: dados,
         columns: columns,
@@ -136,7 +107,6 @@
           }
         },
         rowFormatter: function(row) {
-          // Destaca a linha de totais
           const data = row.getData();
           if (data["__isTotal"]) {
             row.getElement().classList.add("linha-totais");
@@ -146,20 +116,12 @@
       window.table.setLocale("pt-br");
     }
 
-    // Inicia vazio
-    drawTable([]);
-
-    // Recebe dados do Appsmith via postMessage
-    window.addEventListener("message", function(event) {
-      try {
-        let data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (Array.isArray(data)) {
-          drawTable(data);
-        }
-      } catch(e) {
-        console.error("Erro ao processar dados recebidos:", e);
-      }
-    }, false);
+    // PASSO DE TESTE LOCAL — DADOS MOCKADOS!
+    drawTable([
+      { "Classificação": "Fixo", "Descrição do Fornecedor/Cliente": "Empresa A", "Fornecedor/Cliente": "01", "VENCIDO": "R$ 1.000", "24/06": "R$ 500", "25/06": "R$ 500" },
+      { "Classificação": "Fixo", "Descrição do Fornecedor/Cliente": "Empresa B", "Fornecedor/Cliente": "02", "VENCIDO": "R$ 2.000", "24/06": "R$ 800", "25/06": "R$ 1.200" },
+      { "Classificação": "Variável", "Descrição do Fornecedor/Cliente": "Empresa C", "Fornecedor/Cliente": "03", "VENCIDO": "R$ 500", "24/06": "R$ 200", "25/06": "R$ 300" }
+    ]);
   </script>
 </body>
 </html>
