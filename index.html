@@ -124,6 +124,7 @@
     window.addEventListener("message", function(event) {
       try {
         let data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        console.log("Recebido via postMessage:", data); // <-- aqui!
         if (Array.isArray(data)) {
           drawTable(data);
         }
