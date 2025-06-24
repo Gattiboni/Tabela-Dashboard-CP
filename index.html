@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <title>Tabela Financeira (Tabulator)</title>
+  <title>Tabela Detalhamento (Tabulator)</title>
   <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; background: #faf9f6; }
@@ -11,15 +11,19 @@
       background: #e3e6ed;
       font-weight: bold;
     }
+    /* Destaca a linha de totais */
+    .linha-totais {
+      background: #f6e6b3 !important;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
-  <h2>Tabela Financeira (Tabulator)</h2>
+  <h2>Tabela Detalhamento (Tabulator)</h2>
   <div id="tabela"></div>
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Função para calcular largura ideal de texto
     function calcTextWidth(text, font = "14px Arial") {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -27,13 +31,11 @@
       return ctx.measureText(text).width;
     }
 
-    // Gera colunas dinamicamente e ajusta largura das datas
     function gerarColunasDinamicas(dados) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
       return Object.keys(dados[0]).map(key => {
         if (key.match(/^\d{2}\/\d{2}/)) {
-          // Datas: largura baseada no maior valor da coluna
           let maxWidth = calcTextWidth(key, font);
           dados.forEach(row => {
             if (row[key]) {
@@ -45,15 +47,57 @@
           maxWidth = Math.max(65, Math.min(maxWidth, 130));
           return { title: key, field: key, width: maxWidth, hozAlign: "center" };
         }
-        // Colunas principais: largura padrão ou menor para códigos
         if (["Fornecedor/Cliente"].includes(key)) return { title: key, field: key, width: 110 };
         return { title: key, field: key, width: 150 };
       });
     }
 
+    // Função que retorna um objeto "linha de totais" (sem label, só valores)
+    function calcularLinhaTotais(dados) {
+      if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
+      const primeira = dados[0];
+      const keys = Object.keys(primeira);
+
+      // Detecta colunas datas (ex: "24/06", "25/06") e "VENCIDO"
+      const colDatas = keys.filter(k => /^\d{2}\/\d{2}/.test(k));
+      const colVencido = keys.find(k => k.toUpperCase().includes("VENCIDO"));
+
+      const total = {};
+      keys.forEach(k => total[k] = "");
+
+      // Somatórios só nas colunas de interesse
+      if (colVencido) {
+        total[colVencido] = dados.reduce((acc, row) => acc + parseFloat(
+          (row[colVencido] || "0").toString().replace(/[^\d,.\-]/g, "").replace(",", ".")), 0);
+      }
+      colDatas.forEach(c => {
+        total[c] = dados.reduce((acc, row) => acc + parseFloat(
+          (row[c] || "0").toString().replace(/[^\d,.\-]/g, "").replace(",", ".")), 0);
+      });
+
+      // Formata como moeda/decimal se necessário (exemplo: 2 casas)
+      if (colVencido && !isNaN(total[colVencido])) {
+        total[colVencido] = total[colVencido] === 0 ? "" : total[colVencido].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+      }
+      colDatas.forEach(c => {
+        if (!isNaN(total[c])) total[c] = total[c] === 0 ? "" : total[c].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+      });
+
+      // Opcional: pode setar um campo especial pra identificar a linha (ajuda no rowFormatter)
+      total["__isTotal"] = true;
+
+      return total;
+    }
+
     // Função principal de renderização
-    function drawTable(dados) {
-      if (!dados || !Array.isArray(dados) || dados.length === 0) return;
+    function drawTable(dadosOriginais) {
+      if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) return;
+
+      // Cópia do array, não altera original
+      let dados = JSON.parse(JSON.stringify(dadosOriginais));
+      // Calcula totais
+      const linhaTotais = calcularLinhaTotais(dados);
+      dados.unshift(linhaTotais); // insere totals no topo
 
       const columns = gerarColunasDinamicas(dados);
 
@@ -71,7 +115,7 @@
         height: "auto",
         placeholder: "Nenhum dado encontrado.",
         groupBy: "Classificação",
-        groupStartOpen: true, // grupos abertos por padrão
+        groupStartOpen: true,
         groupHeader: function(value, count, data) {
           return value ? value + " (" + count + ")" : "Sem Classificação";
         },
@@ -79,6 +123,13 @@
           "pt-br": {
             "columns": {},
             "data": { "loading": "Carregando...", "error": "Erro nos dados!" }
+          }
+        },
+        rowFormatter: function(row) {
+          // Destaca a linha de totais
+          const data = row.getData();
+          if (data["__isTotal"]) {
+            row.getElement().classList.add("linha-totais");
           }
         }
       });
@@ -88,11 +139,10 @@
     // Inicia vazio
     drawTable([]);
 
-    // Espera dados dinâmicos do Appsmith via postMessage
+    // Recebe dados do Appsmith via postMessage
     window.addEventListener("message", function(event) {
       try {
         let data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        // Espera array de objetos
         if (Array.isArray(data)) {
           drawTable(data);
         }
