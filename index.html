@@ -15,30 +15,54 @@
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
+    // Função que calcula largura ótima para uma string
+    function calcTextWidth(text, font = "14px Arial") {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      ctx.font = font;
+      return ctx.measureText(text).width;
+    }
+
+    // Função para gerar colunas com largura dinâmica nas datas
+    function gerarColunasDinamicas(dados) {
+      if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
+
+      const font = "14px Arial";
+      return Object.keys(dados[0]).map(key => {
+        if (key === "expandCol") {
+          return { title: "+", field: key, width: 40, hozAlign: "center", headerSort: false };
+        }
+        if (key.match(/^\d{2}\/\d{2}/)) {
+          // Pega o maior texto da coluna (inclusive o header)
+          let maxWidth = calcTextWidth(key, font);
+          dados.forEach(row => {
+            if (row[key]) {
+              const w = calcTextWidth(String(row[key]), font);
+              if (w > maxWidth) maxWidth = w;
+            }
+          });
+          // Padding extra
+          maxWidth = Math.ceil(maxWidth + 20);
+          // Limite mínimo e máximo de largura
+          maxWidth = Math.max(65, Math.min(maxWidth, 130));
+          return { title: key, field: key, width: maxWidth, hozAlign: "center" };
+        }
+        return { title: key, field: key, width: 150 };
+      });
+    }
+
     // Função para desenhar a tabela
     function drawTable(dados) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return;
 
-      // Gera colunas dinâmicas baseado nas chaves do primeiro objeto
-      const columns = Object.keys(dados[0]).map(key => {
-        if (key === "expandCol") {
-          return { title: "+", field: key, width: 40, hozAlign: "center", headerSort: false };
-        }
-        // Colunas de datas ficam mais estreitas
-        if (key.match(/^\d{2}\/\d{2}/)) {
-          return { title: key, field: key, width: 85, hozAlign: "center" };
-        }
-        // Demais colunas
-        return { title: key, field: key, width: 150 };
-      });
+      const columns = gerarColunasDinamicas(dados);
 
-      // Destroi tabela antiga se houver (para atualização dinâmica)
+      // Destroi tabela antiga se houver
       if (window.table) {
         window.table.setData([]); // Limpa dados
         window.table.destroy();
       }
 
-      // Cria tabela Tabulator
       window.table = new Tabulator("#tabela", {
         data: dados,
         columns: columns,
@@ -63,10 +87,7 @@
     // Recebe dados via postMessage (do Appsmith)
     window.addEventListener("message", function(event) {
       try {
-        // Se quiser restringir, valide event.origin
-        // if(event.origin !== "https://seu-appsmith.com") return;
         let data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        // Espera um array de objetos como o do Appsmith
         if (Array.isArray(data)) {
           drawTable(data);
         }
