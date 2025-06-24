@@ -11,7 +11,6 @@
       background: #e3e6ed;
       font-weight: bold;
     }
-    /* Destaca a linha de totais */
     .linha-totais {
       background: #f6e6b3 !important;
       font-weight: bold;
@@ -32,12 +31,25 @@
       return ctx.measureText(text).width;
     }
 
-    // Gera colunas dinamicamente e ajusta largura das datas
+    // Função para formatar número como moeda (R$ X.XXX)
+    function moedaBRLSemCentavos(cell) {
+      const value = cell.getValue();
+      if (typeof value !== "number" || isNaN(value)) return "";
+      return value.toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      });
+    }
+
+    // Gera colunas dinamicamente, já aplicando formatter de moeda e escondendo "Fornecedor/Cliente"
     function gerarColunasDinamicas(dados) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
       return Object.keys(dados[0]).map(key => {
-        if (key.match(/^\d{2}\/\d{2}/)) {
+        if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false }; // Esconde coluna
+        if (key.match(/^\d{2}\/\d{2}/) || key === "VENCIDO") {
           let maxWidth = calcTextWidth(key, font);
           dados.forEach(row => {
             if (row[key]) {
@@ -47,54 +59,52 @@
           });
           maxWidth = Math.ceil(maxWidth + 20);
           maxWidth = Math.max(65, Math.min(maxWidth, 130));
-          return { title: key, field: key, width: maxWidth, hozAlign: "center" };
+          return {
+            title: key,
+            field: key,
+            width: maxWidth,
+            hozAlign: "center",
+            formatter: moedaBRLSemCentavos
+          };
         }
-        if (["Fornecedor/Cliente"].includes(key)) return { title: key, field: key, width: 110 };
+        if (["Descrição do Fornecedor/Cliente"].includes(key)) return { title: key, field: key, width: 180 };
         return { title: key, field: key, width: 150 };
       });
     }
 
-    // Gera linha de totais (primeira linha), sem label, só valores
+    // Função para parse seguro na linha de totais
+    function valorNumerico(str) {
+      if (typeof str === "number") return str;
+      if (!str) return 0;
+      return parseFloat(
+        String(str)
+          .replace(/[^\d,.\-]/g, "")
+          .replace(/\./g, "")
+          .replace(",", ".")
+      ) || 0;
+    }
+
+    // Gera linha de totais (primeira linha), só valores (number)
     function calcularLinhaTotais(dados) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
       const primeira = dados[0];
       const keys = Object.keys(primeira);
-
-      // Detecta colunas de datas e "VENCIDO"
       const colDatas = keys.filter(k => /^\d{2}\/\d{2}/.test(k));
       const colVencido = keys.find(k => k.toUpperCase().includes("VENCIDO"));
-
       const total = {};
       keys.forEach(k => total[k] = "");
-
-      // Somatórios só nas colunas de interesse
       if (colVencido) {
-        total[colVencido] = dados.reduce((acc, row) => acc + parseFloat(
-          (row[colVencido] || "0").toString().replace(/[^\d,.\-]/g, "").replace(",", ".")), 0);
+        total[colVencido] = dados.reduce((acc, row) => acc + valorNumerico(row[colVencido]), 0);
       }
       colDatas.forEach(c => {
-        total[c] = dados.reduce((acc, row) => acc + parseFloat(
-          (row[c] || "0").toString().replace(/[^\d,.\-]/g, "").replace(",", ".")), 0);
+        total[c] = dados.reduce((acc, row) => acc + valorNumerico(row[c]), 0);
       });
-
-      // Formata como moeda/decimal se necessário (2 casas)
-      if (colVencido && !isNaN(total[colVencido])) {
-        total[colVencido] = total[colVencido] === 0 ? "" : total[colVencido].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
-      }
-      colDatas.forEach(c => {
-        if (!isNaN(total[c])) total[c] = total[c] === 0 ? "" : total[c].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
-      });
-
-      // Linha especial para destacar (ajuda no rowFormatter)
       total["__isTotal"] = true;
-      // Não coloca nada em "Classificação" — evita grupo!
       return total;
     }
 
-    // Função principal de renderização
     function drawTable(dadosOriginais) {
       if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) return;
-
       // Remove linhas sem "Classificação" (sujeira)
       let dados = dadosOriginais.filter(row =>
         row["Classificação"] !== undefined &&
@@ -124,7 +134,7 @@
         groupBy: "Classificação",
         groupStartOpen: true,
         groupHeader: function(value, count, data) {
-          return value ? value + " (" + count + ")" : ""; // Remove "Sem Classificação"
+          return value ? value + " (" + count + ")" : "";
         },
         langs: {
           "pt-br": {
@@ -133,7 +143,6 @@
           }
         },
         rowFormatter: function(row) {
-          // Destaca a linha de totais
           const data = row.getData();
           if (data["__isTotal"]) {
             row.getElement().classList.add("linha-totais");
