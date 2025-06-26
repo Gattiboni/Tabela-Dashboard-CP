@@ -6,7 +6,7 @@
   <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; background: #faf9f6; }
-    #scrollTopTab { overflow-x: auto; width: 100%; height: 16px; margin-bottom: 4px; }
+    #scrollTopTab { overflow-x: auto; width: 100%; height: 16px; margin-bottom: 4px; background: #faf9f6; }
     #scrollSyncTab { height: 1px; }
     #tabela { margin-top: 0px; }
     .tabulator .tabulator-group {
@@ -21,7 +21,6 @@
 </head>
 <body>
   <h2>Tabela Detalhamento</h2>
-  <!-- Scroll horizontal topo -->
   <div id="scrollTopTab">
     <div id="scrollSyncTab" style="width: 3000px; height: 1px;"></div>
   </div>
@@ -29,211 +28,87 @@
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Função para calcular largura ideal de texto
-    function calcTextWidth(text, font = "14px Arial") {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      ctx.font = font;
-      return ctx.measureText(text).width;
-    }
+    // Exemplo de dados e colunas (substitua pelo seu contexto real, Appsmith envia via postMessage)
+    let yourData = [];    // Inicial vazio
+    let yourColumns = []; // Inicial vazio
 
-    // Formatter: moeda sem casas decimais
-    function moedaBRLSemCentavos(cell) {
-      const value = cell.getValue();
-      if (typeof value !== "number" || isNaN(value)) return "";
-      return value.toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      });
-    }
-
-    // Soma segura para totais
-    function valorNumerico(str) {
-      if (typeof str === "number") return str;
-      if (!str) return 0;
-      return parseFloat(
-        String(str)
-          .replace(/[^\d,.\-]/g, "")
-          .replace(/\./g, "")
-          .replace(",", ".")
-      ) || 0;
-    }
-
-    // Remove colunas que só têm valores vazios/zerados (exceto as colunas-chave)
-    function filtrarColunasUteis(dados, colunasChave) {
-      if (!dados.length) return [];
-      const colunas = Object.keys(dados[0]);
-      return colunas.filter(col => {
-        if (colunasChave.includes(col)) return true;
-        return dados.some(row => valorNumerico(row[col]) > 0);
-      });
-    }
-
-    // Gera colunas dinâmicas (apenas as que têm valor)
-    function gerarColunasDinamicas(dados, colunasVisiveis) {
-      if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
-      const font = "14px Arial";
-      return colunasVisiveis.map(key => {
-        if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false };
-        if (key.match(/^\d{2}\/\d{2}/) || key === "VENCIDO") {
-          let maxWidth = calcTextWidth(key, font);
-          dados.forEach(row => {
-            let val = row[key];
-            if (typeof val === "number") val = val.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
-            if (val) {
-              const w = calcTextWidth(String(val), font);
-              if (w > maxWidth) maxWidth = w;
-            }
-          });
-          maxWidth = Math.ceil(maxWidth + 24);
-          maxWidth = Math.max(110, Math.min(maxWidth, 190));
-          return {
-            title: key,
-            field: key,
-            width: maxWidth,
-            hozAlign: "center",
-            formatter: moedaBRLSemCentavos
-          };
+    // Inicialização básica (será refeito via postMessage, pode sobrescrever)
+    const table = new Tabulator("#tabela", {
+      data: yourData,
+      columns: yourColumns,
+      layout: "fitDataStretch",
+      height: "auto",
+      placeholder: "Nenhum dado encontrado.",
+      groupBy: "Classificação",
+      groupStartOpen: true,
+      groupHeader: function(value, count, data) {
+        return value ? value + " (" + count + ")" : "";
+      },
+      rowFormatter: function(row) {
+        const data = row.getData();
+        if (data["__isTotal"]) {
+          row.getElement().classList.add("linha-totais");
         }
-        if (["Descrição do Fornecedor/Cliente"].includes(key)) return { title: key, field: key, width: 180 };
-        return { title: key, field: key, width: 150 };
-      });
+      }
+    });
+
+    // Referências DOM (depois que Tabulator existir!)
+    const scrollTopTab = document.getElementById("scrollTopTab");
+    const scrollSyncTab = document.getElementById("scrollSyncTab");
+    let tabelaHolder = null;
+
+    // --- Função: Atualiza largura do scroll fake para igualar à tabela ---
+    function updateScrollWidth() {
+      tabelaHolder = table.element.querySelector(".tabulator-tableholder");
+      if (tabelaHolder && scrollSyncTab) {
+        scrollSyncTab.style.width = `${tabelaHolder.scrollWidth}px`;
+      }
     }
 
-    // Linha de totais (primeira linha)
-    function calcularLinhaTotais(dados, colunasVisiveis) {
-      if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
-      const total = {};
-      colunasVisiveis.forEach(k => {
-        if (k === "Classificação" || k === "Descrição do Fornecedor/Cliente" || k === "Fornecedor/Cliente") {
-          total[k] = "";
-        } else {
-          total[k] = dados.reduce((acc, row) => acc + valorNumerico(row[k]), 0) || "";
-        }
-      });
-      total["__isTotal"] = true;
-      return total;
+    // --- Sincroniza scrolls (tabela <-> barra fake superior) ---
+    function syncFakeToTable() {
+      if (tabelaHolder) {
+        tabelaHolder.scrollLeft = scrollTopTab.scrollLeft;
+      }
+    }
+    function syncTableToFake(left) {
+      scrollTopTab.removeEventListener("scroll", syncFakeToTable);
+      scrollTopTab.scrollLeft = left;
+      scrollTopTab.addEventListener("scroll", syncFakeToTable);
     }
 
-    function drawTable(dadosOriginais) {
-      if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) return;
-      // Remove linhas sem "Classificação"
-      let dados = dadosOriginais.filter(row =>
-        row["Classificação"] !== undefined &&
-        row["Classificação"] !== null &&
-        row["Classificação"].toString().trim() !== ""
-      ).map(row => ({ ...row }));
+    // --- Evento: Scroll real movimenta fake
+    table.on("scrollHorizontal", syncTableToFake);
 
-      // Remove colunas "fantasma" (ex: _isTotal)
-      dados.forEach(row => { if ("_isTotal" in row) delete row["_isTotal"]; });
+    // --- Evento: Scroll fake movimenta real
+    scrollTopTab.addEventListener("scroll", syncFakeToTable);
 
-      // Descobre se há drilldown por data (ou seja, só 1 coluna de data além das chaves principais)
-      const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente"];
-      let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
-      const datasVisiveis = colunasVisiveis.filter(k => /^\d{2}\/\d{2}/.test(k));
-      const temDrilldownData = datasVisiveis.length === 1;
+    // --- Resize e rebuild: atualiza largura da barra fake
+    table.on("dataLoaded", updateScrollWidth);
+    table.on("renderComplete", updateScrollWidth);
+    table.on("tableBuilt", updateScrollWidth);
+    window.addEventListener('resize', updateScrollWidth);
 
-      // --- FILTRO AVANÇADO PARA NÃO TRAZER SÓ VENCIDO ---
-      if (temDrilldownData) {
-        const nomeColunaData = datasVisiveis[0];
-        dados = dados.filter(row => {
-          // Mantém se houver valor tanto em VENCIDO quanto na data OU só na data
-          const valorData = valorNumerico(row[nomeColunaData]);
-          // Se não houver valor na data, ignora a linha
-          if (valorData <= 0) return false;
-          // Se houver valor na data, tanto faz ter vencido ou não: mostra
-          return true;
+    // --- postMessage: atualiza dados da tabela e barra fake ---
+    window.addEventListener("message", function(event) {
+      let dados = null;
+      if (event.data && typeof event.data === "string") {
+        try { dados = JSON.parse(event.data); } catch(e) {}
+      } else if (event.data && Array.isArray(event.data)) {
+        dados = event.data;
+      }
+      if (dados && Array.isArray(dados)) {
+        // Atualiza tabela
+        table.replaceData(dados).then(() => {
+          updateScrollWidth();
+          if (tabelaHolder) tabelaHolder.scrollLeft = 0;
+          scrollTopTab.scrollLeft = 0;
         });
       }
-
-      // Remove colunas que ficaram vazias após o filtro
-      colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
-
-      // Linha de totais
-      const linhaTotais = calcularLinhaTotais(dados, colunasVisiveis);
-      dados.unshift(linhaTotais);
-
-      // Remove __isTotal da exibição
-      colunasVisiveis = colunasVisiveis.filter(col => col !== "__isTotal");
-
-      const columns = gerarColunasDinamicas(dados, colunasVisiveis);
-
-      if (window.table) {
-        window.table.setData([]);
-        window.table.destroy();
-      }
-
-      window.table = new Tabulator("#tabela", {
-        data: dados,
-        columns: columns,
-        layout: "fitDataStretch",
-        movableColumns: true,
-        resizableRows: false,
-        height: "auto",
-        placeholder: "Nenhum dado encontrado.",
-        groupBy: "Classificação",
-        groupStartOpen: true,
-        groupHeader: function(value, count, data) {
-          return value ? value + " (" + count + ")" : "";
-        },
-        langs: {
-          "pt-br": {
-            "columns": {},
-            "data": { "loading": "Carregando...", "error": "Erro nos dados!" }
-          }
-        },
-        rowFormatter: function(row) {
-          const data = row.getData();
-          if (data["__isTotal"]) {
-            row.getElement().classList.add("linha-totais");
-          }
-        }
-      });
-      window.table.setLocale("pt-br");
-
-      // --- Scroll horizontal sincronizado no topo (versão robusta) ---
-      function sincronizarScrollHorizontal() {
-        const tabelaDiv = document.querySelector("#tabela .tabulator-tableholder");
-        const scrollTopTab = document.getElementById("scrollTopTab");
-        const scrollSyncTab = document.getElementById("scrollSyncTab");
-        if (!tabelaDiv || !scrollTopTab || !scrollSyncTab) return;
-        scrollSyncTab.style.width = tabelaDiv.scrollWidth + "px";
-        tabelaDiv.onscroll = null;
-        scrollTopTab.onscroll = null;
-        let bloqueiaLoopTabela = false;
-        let bloqueiaLoopTop = false;
-        tabelaDiv.onscroll = () => {
-          if (bloqueiaLoopTabela) { bloqueiaLoopTabela = false; return; }
-          bloqueiaLoopTop = true;
-          scrollTopTab.scrollLeft = tabelaDiv.scrollLeft;
-        };
-        scrollTopTab.onscroll = () => {
-          if (bloqueiaLoopTop) { bloqueiaLoopTop = false; return; }
-          bloqueiaLoopTabela = true;
-          tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
-        };
-        tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
-      }
-      setTimeout(sincronizarScrollHorizontal, 700);
-      window.addEventListener('resize', sincronizarScrollHorizontal);
-    }
-
-    // Inicia vazio
-    drawTable([]);
-
-    // Recebe dados do Appsmith via postMessage
-    window.addEventListener("message", function(event) {
-      try {
-        let data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (Array.isArray(data)) {
-          drawTable(data);
-        }
-      } catch(e) {
-        console.error("Erro ao processar dados recebidos:", e);
-      }
     }, false);
+
+    // --- Inicial: deixa barra fake correta (se tabela vier vazia) ---
+    setTimeout(updateScrollWidth, 700);
   </script>
 </body>
 </html>
