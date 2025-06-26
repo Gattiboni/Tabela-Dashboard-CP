@@ -49,11 +49,34 @@
       });
     }
 
-    // Colunas dinâmicas + formatter + oculta "Fornecedor/Cliente"
-    function gerarColunasDinamicas(dados) {
+    // Soma segura para totais
+    function valorNumerico(str) {
+      if (typeof str === "number") return str;
+      if (!str) return 0;
+      return parseFloat(
+        String(str)
+          .replace(/[^\d,.\-]/g, "")
+          .replace(/\./g, "")
+          .replace(",", ".")
+      ) || 0;
+    }
+
+    // Remove colunas que só têm valores vazios/zerados (exceto as colunas-chave)
+    function filtrarColunasUteis(dados, colunasChave) {
+      if (!dados.length) return [];
+      const colunas = Object.keys(dados[0]);
+      return colunas.filter(col => {
+        if (colunasChave.includes(col)) return true;
+        // Se todos os valores forem "" ou zero, não exibe a coluna
+        return dados.some(row => valorNumerico(row[col]) > 0);
+      });
+    }
+
+    // Gera colunas dinâmicas (apenas as que têm valor)
+    function gerarColunasDinamicas(dados, colunasVisiveis) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
-      return Object.keys(dados[0]).map(key => {
+      return colunasVisiveis.map(key => {
         if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false };
         if (key.match(/^\d{2}\/\d{2}/) || key === "VENCIDO") {
           let maxWidth = calcTextWidth(key, font);
@@ -80,33 +103,18 @@
       });
     }
 
-    // Soma segura para totais
-    function valorNumerico(str) {
-      if (typeof str === "number") return str;
-      if (!str) return 0;
-      return parseFloat(
-        String(str)
-          .replace(/[^\d,.\-]/g, "")
-          .replace(/\./g, "")
-          .replace(",", ".")
-      ) || 0;
-    }
-
     // Linha de totais (primeira linha)
-    function calcularLinhaTotais(dados) {
+    function calcularLinhaTotais(dados, colunasVisiveis) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
-      const primeira = dados[0];
-      const keys = Object.keys(primeira);
-      const colDatas = keys.filter(k => /^\d{2}\/\d{2}/.test(k));
-      const colVencido = keys.find(k => k.toUpperCase().includes("VENCIDO"));
       const total = {};
-      keys.forEach(k => total[k] = "");
-      if (colVencido) {
-        total[colVencido] = dados.reduce((acc, row) => acc + valorNumerico(row[colVencido]), 0);
-      }
-      colDatas.forEach(c => {
-        total[c] = dados.reduce((acc, row) => acc + valorNumerico(row[c]), 0);
+      colunasVisiveis.forEach(k => {
+        if (k === "Classificação" || k === "Descrição do Fornecedor/Cliente" || k === "Fornecedor/Cliente") {
+          total[k] = "";
+        } else {
+          total[k] = dados.reduce((acc, row) => acc + valorNumerico(row[k]), 0) || "";
+        }
       });
+      // NÃO inclui _isTotal na linha de dados (apenas para styling)
       total["__isTotal"] = true;
       return total;
     }
@@ -120,11 +128,26 @@
         row["Classificação"].toString().trim() !== ""
       ).map(row => ({ ...row }));
 
+      // Remove colunas "fantasma" (ex: _isTotal)
+      dados.forEach(row => { if ("_isTotal" in row) delete row["_isTotal"]; });
+
+      // Remove colunas que só têm valor zero/vazio (menos chaves principais)
+      const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente"];
+      let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
+
+      // Se só sobrar colunas-chave, não mostra nenhuma coluna de valor
+      if (colunasVisiveis.length === colunasChave.length) {
+        // Não mostra nada (ou só header, se desejar)
+      }
+
       // Linha de totais
-      const linhaTotais = calcularLinhaTotais(dados);
+      const linhaTotais = calcularLinhaTotais(dados, colunasVisiveis);
       dados.unshift(linhaTotais);
 
-      const columns = gerarColunasDinamicas(dados);
+      // Remove __isTotal da exibição
+      colunasVisiveis = colunasVisiveis.filter(col => col !== "__isTotal");
+
+      const columns = gerarColunasDinamicas(dados, colunasVisiveis);
 
       if (window.table) {
         window.table.setData([]);
