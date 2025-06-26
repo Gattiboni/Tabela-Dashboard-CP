@@ -125,26 +125,22 @@
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Utilitário: Formata data para DD/MM/AA (aceita Date ou string tipo '2024-06-27' ou '27/06/2024')
+    // Utilitário: Formata data para DD/MM/AA
     function formatarData(data) {
       if (!data) return "-";
-      // Se já está no formato certo
       if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(data)) {
-        // Força para 2 dígitos finais como AA
         let partes = data.split('/');
         let ano = partes[2].slice(-2);
         return partes[0].padStart(2,'0') + '/' + partes[1].padStart(2,'0') + '/' + ano;
       }
-      // Se no formato ISO ou Date
       let d = new Date(data);
-      if (isNaN(d)) return data; // retorna o original se não é data parseável
+      if (isNaN(d)) return data;
       let dia = String(d.getDate()).padStart(2, '0');
       let mes = String(d.getMonth() + 1).padStart(2, '0');
       let ano = String(d.getFullYear()).slice(-2);
       return dia + '/' + mes + '/' + ano;
     }
 
-    // Modal Histórico (leitura)
     function abrirModalHistorico(html) {
       document.getElementById('historicoConteudo').innerHTML = html;
       document.getElementById('modalHistoricoOverlay').style.display = 'flex';
@@ -152,7 +148,6 @@
     function fecharModalHistorico() {
       document.getElementById('modalHistoricoOverlay').style.display = 'none';
     }
-    // Modal de edição/registro
     function abrirModalEdicao(rowData) {
       document.getElementById('ed_fornecedor').textContent = rowData["Descrição do Fornecedor/Cliente"] || "-";
       document.getElementById('ed_registrante').value = "";
@@ -181,7 +176,6 @@
       if (event.target === document.getElementById('modalEdicaoOverlay')) fecharModalEdicao();
     };
 
-    // Utilitários padrão (idem antes)
     function calcTextWidth(text, font = "14px Arial") {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -230,13 +224,18 @@
       return total;
     }
 
-    // Colunas: ícone de histórico (primeira), e clique no nome do fornecedor para editar
+    // NOVA: Só mostra linha se tiver valor relevante em qualquer coluna (exceto chaves)
+    function isLinhaComValor(row, colunasVisiveis, colunasChave) {
+      return colunasVisiveis.some(col =>
+        !colunasChave.includes(col) && valorNumerico(row[col]) > 0
+      );
+    }
+
     function gerarColunasDinamicas(dados, colunasVisiveis) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
       let baseCols = colunasVisiveis.map(key => {
         if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false };
-        // Editável: clique no nome do fornecedor abre modal de edição
         if (["Descrição do Fornecedor/Cliente"].includes(key)) return {
           title: key,
           field: key,
@@ -321,7 +320,7 @@
       ).map(row => ({ ...row }));
       dados.forEach(row => { if ("_isTotal" in row) delete row["_isTotal"]; });
 
-      const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente"];
+      const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente", "__historico"];
       let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
       const datasVisiveis = colunasVisiveis.filter(k => /^\d{2}\/\d{2}/.test(k));
       const temDrilldownData = datasVisiveis.length === 1;
@@ -330,6 +329,9 @@
         dados = dados.filter(row => valorNumerico(row[nomeColunaData]) > 0);
       }
       colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
+
+      // === FILTRA LINHAS ZERADAS ===
+      dados = dados.filter(row => isLinhaComValor(row, colunasVisiveis, colunasChave));
 
       const linhaTotais = calcularLinhaTotais(dados, colunasVisiveis);
       dados.unshift(linhaTotais);
