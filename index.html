@@ -14,9 +14,8 @@
     .icone-historico { font-size: 18px; cursor: pointer; text-align: center; display: block; margin: 0 auto; }
     .icone-historico.com-historico { color: #0074D9; }
     .icone-historico.sem-historico { color: #AAA; }
-
     /* Modal customizado */
-    #modalHistoricoOverlay {
+    .modalOverlay {
       display: none;
       position: fixed;
       z-index: 1002;
@@ -24,10 +23,10 @@
       background: rgba(0,0,0,0.32);
       justify-content: center; align-items: center;
     }
-    #modalHistoricoBox {
+    .modalBox {
       background: #fff;
       border-radius: 10px;
-      max-width: 370px;
+      max-width: 390px;
       min-width: 260px;
       padding: 28px 24px 20px 24px;
       box-shadow: 0 12px 36px #2222;
@@ -36,10 +35,10 @@
       font-size: 1.08rem;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
       animation: modalIn 0.16s;
     }
-    #modalHistoricoBox .fechar-modal {
+    .modalBox .fechar-modal {
       position: absolute;
       right: 16px;
       top: 12px;
@@ -50,22 +49,36 @@
       cursor: pointer;
       transition: color .2s;
     }
-    #modalHistoricoBox .fechar-modal:hover { color: #b00; }
-    #modalHistoricoBox h3 {
-      font-size: 1.15rem;
-      margin: 0 0 8px 0;
-      color: #304574;
-      font-weight: 600;
+    .modalBox .fechar-modal:hover { color: #b00; }
+    .modalBox h3 { font-size: 1.15rem; margin: 0 0 8px 0; color: #304574; font-weight: 600; }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(32px);} to { opacity: 1; transform: translateY(0);} }
+    .modalBox label { font-weight: 500; margin-right: 3px; color: #757575; }
+    .modalBox input, .modalBox textarea, .modalBox select {
+      font-size: 1rem;
+      border: 1px solid #c5c5c5;
+      border-radius: 5px;
+      padding: 5px 7px;
+      margin-top: 3px;
+      width: 96%;
+      background: #f8f8f8;
+      box-sizing: border-box;
     }
-    @keyframes modalIn {
-      from { opacity: 0; transform: translateY(32px);}
-      to   { opacity: 1; transform: translateY(0);}
+    .modalBox textarea { min-height: 64px; }
+    .modalBox button[type=submit] {
+      background: #1269d0;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 7px 20px;
+      font-weight: bold;
+      font-size: 1rem;
+      margin-top: 10px;
+      cursor: pointer;
+      align-self: flex-end;
+      box-shadow: 0 2px 10px #1269d033;
+      transition: background .18s;
     }
-    #modalHistoricoBox label {
-      font-weight: 500;
-      margin-right: 3px;
-      color: #757575;
-    }
+    .modalBox button[type=submit]:hover { background: #0d4690; }
   </style>
 </head>
 <body>
@@ -75,20 +88,44 @@
   </div>
   <div id="tabela"></div>
 
-  <!-- Modal Histórico -->
-  <div id="modalHistoricoOverlay">
-    <div id="modalHistoricoBox">
+  <!-- Modal Histórico (somente leitura) -->
+  <div id="modalHistoricoOverlay" class="modalOverlay">
+    <div id="modalHistoricoBox" class="modalBox">
       <button class="fechar-modal" onclick="fecharModalHistorico()">×</button>
       <h3>Histórico do Fornecedor</h3>
-      <div id="historicoConteudo">
-        <!-- Conteúdo do histórico aparece aqui -->
-      </div>
+      <div id="historicoConteudo"></div>
+    </div>
+  </div>
+  <!-- Modal Edição/Registro -->
+  <div id="modalEdicaoOverlay" class="modalOverlay">
+    <div id="modalEdicaoBox" class="modalBox">
+      <button class="fechar-modal" onclick="fecharModalEdicao()">×</button>
+      <h3>Registrar/Editar Histórico</h3>
+      <form id="formEdicaoHistorico" autocomplete="off">
+        <div>
+          <label>Fornecedor:</label>
+          <span id="ed_fornecedor"></span>
+        </div>
+        <div>
+          <label>Nome de quem registra:</label>
+          <input type="text" id="ed_registrante" required />
+        </div>
+        <div>
+          <label>Comentário/Histórico:</label>
+          <textarea id="ed_comentario" placeholder="Digite aqui..." required></textarea>
+        </div>
+        <div>
+          <label>Vencimento Programado:</label>
+          <input type="date" id="ed_vencimento" />
+        </div>
+        <button type="submit">Salvar</button>
+      </form>
     </div>
   </div>
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Modal control
+    // Modal Histórico (leitura)
     function abrirModalHistorico(html) {
       document.getElementById('historicoConteudo').innerHTML = html;
       document.getElementById('modalHistoricoOverlay').style.display = 'flex';
@@ -96,21 +133,46 @@
     function fecharModalHistorico() {
       document.getElementById('modalHistoricoOverlay').style.display = 'none';
     }
+    // Modal de edição/registro
+    function abrirModalEdicao(rowData) {
+      document.getElementById('ed_fornecedor').textContent = rowData["Descrição do Fornecedor/Cliente"] || "-";
+      document.getElementById('ed_registrante').value = "";
+      document.getElementById('ed_comentario').value = "";
+      document.getElementById('ed_vencimento').value = "";
+      document.getElementById('modalEdicaoOverlay').style.display = 'flex';
+      // Handler submit
+      document.getElementById('formEdicaoHistorico').onsubmit = function(e) {
+        e.preventDefault();
+        // Simplesmente loga os dados por enquanto
+        const registro = {
+          fornecedor: rowData["Descrição do Fornecedor/Cliente"],
+          classificacao: rowData["Classificação"],
+          registrante: document.getElementById('ed_registrante').value,
+          comentario: document.getElementById('ed_comentario').value,
+          vencimento: document.getElementById('ed_vencimento').value
+        };
+        fecharModalEdicao();
+        console.log("Registro histórico (mock):", registro);
+        alert("Registro salvo!\n(Dados apenas logados no console nesta etapa MVP)");
+      };
+    }
+    function fecharModalEdicao() {
+      document.getElementById('modalEdicaoOverlay').style.display = 'none';
+    }
     // Fecha ao clicar fora
     window.onclick = function(event) {
-      if (event.target === document.getElementById('modalHistoricoOverlay')) {
-        fecharModalHistorico();
-      }
+      if (event.target === document.getElementById('modalHistoricoOverlay')) fecharModalHistorico();
+      if (event.target === document.getElementById('modalEdicaoOverlay')) fecharModalEdicao();
     };
 
-    // Utilitários padrão
-    function calcTextWidth(text, font = "14px Arial") { /* ... igual antes ... */ 
+    // Utilitários padrão (idem antes)
+    function calcTextWidth(text, font = "14px Arial") {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
       ctx.font = font;
       return ctx.measureText(text).width;
     }
-    function moedaBRLSemCentavos(cell) { /* ... igual antes ... */
+    function moedaBRLSemCentavos(cell) {
       const value = cell.getValue();
       if (typeof value !== "number" || isNaN(value)) return "";
       return value.toLocaleString("pt-BR", {
@@ -120,7 +182,7 @@
         maximumFractionDigits: 0
       });
     }
-    function valorNumerico(str) { /* ... igual antes ... */
+    function valorNumerico(str) {
       if (typeof str === "number") return str;
       if (!str) return 0;
       return parseFloat(
@@ -130,7 +192,7 @@
           .replace(",", ".")
       ) || 0;
     }
-    function filtrarColunasUteis(dados, colunasChave) { /* ... igual antes ... */
+    function filtrarColunasUteis(dados, colunasChave) {
       if (!dados.length) return [];
       const colunas = Object.keys(dados[0]);
       return colunas.filter(col => {
@@ -138,7 +200,7 @@
         return dados.some(row => valorNumerico(row[col]) > 0);
       });
     }
-    function calcularLinhaTotais(dados, colunasVisiveis) { /* ... igual antes ... */
+    function calcularLinhaTotais(dados, colunasVisiveis) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
       const total = {};
       colunasVisiveis.forEach(k => {
@@ -152,14 +214,26 @@
       return total;
     }
 
-    // Colunas: ícone de histórico como PRIMEIRA coluna
+    // Colunas: ícone de histórico (primeira), e clique no nome do fornecedor para editar
     function gerarColunasDinamicas(dados, colunasVisiveis) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
-
       let baseCols = colunasVisiveis.map(key => {
         if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false };
-        if (["Descrição do Fornecedor/Cliente"].includes(key)) return { title: key, field: key, width: 180 };
+        // Editável: clique no nome do fornecedor abre modal de edição
+        if (["Descrição do Fornecedor/Cliente"].includes(key)) return {
+          title: key,
+          field: key,
+          width: 180,
+          cellClick: function(e, cell) {
+            const rowData = cell.getRow().getData();
+            abrirModalEdicao(rowData);
+          },
+          formatter: function(cell) {
+            const value = cell.getValue();
+            return `<span style="cursor:pointer;color:#2567d4;font-weight:500" title="Editar histórico">${value}</span>`;
+          }
+        };
         if (key.match(/^\d{2}\/\d{2}/) || key === "VENCIDO") {
           let maxWidth = calcTextWidth(key, font);
           dados.forEach(row => {
@@ -195,7 +269,6 @@
           return `<span class="icone-historico sem-historico" title="Ver histórico">&#128172;</span>`;
         },
         cellClick: function(e, cell) {
-          // Aqui vai o modal, com dados reais (por enquanto, só fornecedor)
           const rowData = cell.getRow().getData();
           abrirModalHistorico(`
             <label>Fornecedor:</label> <b>${rowData["Descrição do Fornecedor/Cliente"] || "-"}</b>
@@ -319,9 +392,7 @@
       table.on("columnResized", updateScrollbarWidth);
     }
 
-    // Inicializa vazio
     drawTable([]);
-
     window.addEventListener("message", function(event) {
       try {
         let data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
