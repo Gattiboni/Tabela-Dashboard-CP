@@ -15,6 +15,7 @@
     .icone-historico { font-size: 18px; cursor: pointer; text-align: center; display: block; margin: 0 auto; }
     .icone-historico.com-historico { color: #0074D9; }
     .icone-historico.sem-historico { color: #AAA; }
+    .checkbox-pagamento { width: 18px; height: 18px; cursor: pointer; accent-color: #21a65b; margin: 0 auto; display: block; }
     .modalOverlay {
       display: none;
       position: fixed;
@@ -26,7 +27,7 @@
     .modalBox {
       background: #fff;
       border-radius: 10px;
-      max-width: 410px;
+      max-width: 430px;
       min-width: 260px;
       padding: 28px 24px 20px 24px;
       box-shadow: 0 12px 36px #2222;
@@ -64,8 +65,8 @@
       box-sizing: border-box;
     }
     .modalBox textarea { min-height: 64px; }
-    .modalBox button[type=submit] {
-      background: #1269d0;
+    .modalBox button[type=submit], .modalBox .btn-confirmar-pag {
+      background: #21a65b;
       color: #fff;
       border: none;
       border-radius: 5px;
@@ -75,14 +76,24 @@
       margin-top: 10px;
       cursor: pointer;
       align-self: flex-end;
-      box-shadow: 0 2px 10px #1269d033;
+      box-shadow: 0 2px 10px #21a65b33;
       transition: background .18s;
     }
-    .modalBox button[type=submit]:hover { background: #0d4690; }
+    .modalBox button[type=submit]:hover, .modalBox .btn-confirmar-pag:hover { background: #14763a; }
     .historico-alteracoes { margin-top: 12px; padding: 9px 13px; background: #f6f7fa; border-radius: 7px; font-size: .99rem; color: #305; }
     .historico-alteracoes label { color: #457; font-weight: 600; }
     .lista-venc { margin: 5px 0 0 0; padding: 0 0 0 8px; }
     .lista-venc li { margin-bottom: 2px; font-size: 1.02rem; }
+    .totalizador { font-weight: bold; color: #156b1c; margin-top: 8px; font-size: 1.09rem; }
+    .saldo-negativo { color: #b11c1c !important; }
+    .pag-dia-box { background: #f8f9ff; border-radius: 7px; padding: 9px 14px 5px 14px; }
+    .btn-pag-dia { background: #21a65b; color: #fff; font-weight: bold; border: none; border-radius: 5px; font-size: 1.04rem; padding: 6px 19px; margin: 11px 0 12px 0; float: right; cursor: pointer; box-shadow: 0 2px 12px #21a65b28; }
+    .btn-pag-dia:disabled { background: #aaa; cursor: not-allowed; color: #eee; }
+    .pag-dia-lista { margin: 12px 0 0 0; }
+    .pag-dia-lista ul { padding-left: 18px; }
+    .pag-dia-lista .grupo { margin-top: 8px; margin-bottom: 2px; font-weight: 600; color: #375689; }
+    .pag-dia-lista .linha-fornec { margin-bottom: 1px; }
+    .pag-dia-campo { margin: 6px 0 3px 0; }
   </style>
 </head>
 <body>
@@ -92,6 +103,9 @@
     <div id="scrollSyncTab"></div>
   </div>
   <div id="tabela"></div>
+  <button id="btnConfirmarPagDia" class="btn-pag-dia" onclick="abrirPagamentosDiaModal()" style="display:none;">
+    Confirmar Pagamentos do Dia
+  </button>
 
   <!-- Modal Histórico (somente leitura) -->
   <div id="modalHistoricoOverlay" class="modalOverlay">
@@ -127,10 +141,25 @@
       </form>
     </div>
   </div>
+  <!-- Modal Pagamentos do Dia -->
+  <div id="modalPagDiaOverlay" class="modalOverlay">
+    <div id="modalPagDiaBox" class="modalBox pag-dia-box">
+      <button class="fechar-modal" onclick="fecharModalPagDia()">×</button>
+      <h3>Pagamentos Selecionados para o Dia</h3>
+      <div class="pag-dia-campo">
+        <label>Saldo em Conta:</label>
+        <input type="number" id="saldoConta" min="0" step="0.01" value="" oninput="atualizarSaldoPosPag()" placeholder="Digite o saldo atual" />
+      </div>
+      <div id="pagDiaLista"></div>
+      <div id="totalPagamentosDia" class="totalizador"></div>
+      <div id="saldoPosPag" class="totalizador"></div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
     let dadosOriginaisGlobal = []; // Para busca geral
+    let pagamentosSelecionados = {}; // id da linha (rowIndex) => true
 
     function formatarData(data) {
       if (!data) return "-";
@@ -177,9 +206,18 @@
     function fecharModalEdicao() {
       document.getElementById('modalEdicaoOverlay').style.display = 'none';
     }
+    function abrirPagamentosDiaModal() {
+      atualizarPagamentosDiaModal();
+      document.getElementById('modalPagDiaOverlay').style.display = 'flex';
+      document.getElementById('saldoConta').focus();
+    }
+    function fecharModalPagDia() {
+      document.getElementById('modalPagDiaOverlay').style.display = 'none';
+    }
     window.onclick = function(event) {
       if (event.target === document.getElementById('modalHistoricoOverlay')) fecharModalHistorico();
       if (event.target === document.getElementById('modalEdicaoOverlay')) fecharModalEdicao();
+      if (event.target === document.getElementById('modalPagDiaOverlay')) fecharModalPagDia();
     };
 
     function calcTextWidth(text, font = "14px Arial") {
@@ -189,7 +227,7 @@
       return ctx.measureText(text).width;
     }
     function moedaBRLSemCentavos(cell) {
-      const value = cell.getValue();
+      const value = (typeof cell === "object" && cell.getValue) ? cell.getValue() : cell;
       if (typeof value !== "number" || isNaN(value)) return "";
       return value.toLocaleString("pt-BR", {
         style: "currency",
@@ -276,6 +314,35 @@
         return { title: key, field: key, width: 150 };
       });
 
+      // Checkbox 💸 - Primeira coluna
+      const checkboxCol = {
+        title: "💸",
+        field: "__pagdia",
+        width: 38,
+        hozAlign: "center",
+        headerSort: false,
+        resizable: false,
+        cssClass: "col-pagdia",
+        formatter: function(cell) {
+          // Somente para linhas normais (não totais)
+          const rowData = cell.getRow().getData();
+          if (rowData["__isTotal"]) return "";
+          const rowId = cell.getRow().getPosition();
+          const checked = pagamentosSelecionados[rowId] ? "checked" : "";
+          return `<input type="checkbox" class="checkbox-pagamento" data-rowid="${rowId}" ${checked}/>`;
+        },
+        cellClick: function(e, cell) {
+          const rowId = cell.getRow().getPosition();
+          const rowData = cell.getRow().getData();
+          if (rowData["__isTotal"]) return;
+          // Toggle
+          pagamentosSelecionados[rowId] = !pagamentosSelecionados[rowId];
+          atualizarCheckboxes();
+          atualizarBotaoPagDia();
+        }
+      };
+
+      // Histórico - segunda coluna
       const historicoCol = {
         title: "",
         field: "__historico",
@@ -289,7 +356,6 @@
         },
         cellClick: function(e, cell) {
           const rowData = cell.getRow().getData();
-          // Lista todos os vencimentos anteriores (array)
           let vencimentos = rowData["Vencimentos Anteriores"];
           let vencHtml = "-";
           if (Array.isArray(vencimentos) && vencimentos.length > 0) {
@@ -312,11 +378,13 @@
         }
       };
       baseCols.unshift(historicoCol);
+      baseCols.unshift(checkboxCol);
       return baseCols;
     }
 
     function drawTable(dadosOriginais) {
       dadosOriginaisGlobal = dadosOriginais || [];
+      pagamentosSelecionados = {}; // Reseta seleção a cada redraw
       if (window.table) {
         window.table.destroy();
         window.table = null;
@@ -336,7 +404,7 @@
       ).map(row => ({ ...row }));
       dados.forEach(row => { if ("_isTotal" in row) delete row["_isTotal"]; });
 
-      const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente", "__historico"];
+      const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente", "__historico", "__pagdia"];
       let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
       const datasVisiveis = colunasVisiveis.filter(k => /^\d{2}\/\d{2}/.test(k));
       const temDrilldownData = datasVisiveis.length === 1;
@@ -347,6 +415,29 @@
       colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
 
       dados = dados.filter(row => isLinhaComValor(row, colunasVisiveis, colunasChave));
+
+      // Pré-seleciona os pagamentos com vencimento programado hoje
+      const hoje = new Date();
+      hoje.setHours(0,0,0,0);
+      dados.forEach((row, idx) => {
+        if (row["VENCIDO"] > 0) {
+          // Vencidos não são pagos "hoje" por padrão
+          return;
+        }
+        // Para títulos a vencer, verifica se alguma coluna de data tem valor e é hoje
+        for (const col of colunasVisiveis) {
+          if (col.match(/^\d{2}\/\d{2}/) && valorNumerico(row[col]) > 0) {
+            // Só marca se data igual hoje
+            const [dia, mes] = col.split("/");
+            if (
+              parseInt(dia) === hoje.getDate() &&
+              parseInt(mes) === hoje.getMonth() + 1
+            ) {
+              pagamentosSelecionados[idx] = true;
+            }
+          }
+        }
+      });
 
       const linhaTotais = calcularLinhaTotais(dados, colunasVisiveis);
       dados.unshift(linhaTotais);
@@ -382,7 +473,90 @@
       window.table.setLocale("pt-br");
       window.table.on("tableBuilt", function() {
         setupScrollSync(window.table);
+        setTimeout(() => {
+          atualizarCheckboxes();
+          atualizarBotaoPagDia();
+        }, 100);
       });
+    }
+
+    // Checkbox e botão pagamentos do dia
+    function atualizarCheckboxes() {
+      // Atualiza estado visual dos checkboxes
+      document.querySelectorAll(".checkbox-pagamento").forEach(cb => {
+        const idx = cb.getAttribute("data-rowid");
+        cb.checked = !!pagamentosSelecionados[idx];
+      });
+    }
+    function atualizarBotaoPagDia() {
+      const btn = document.getElementById("btnConfirmarPagDia");
+      const count = Object.values(pagamentosSelecionados).filter(Boolean).length;
+      btn.style.display = count > 0 ? "inline-block" : "none";
+    }
+
+    // Modal pagamentos do dia
+    function atualizarPagamentosDiaModal() {
+      // Busca os dados selecionados
+      const table = window.table;
+      if (!table) return;
+      const allRows = table.getRows().filter(r => !r.getData()["__isTotal"]);
+      let selecionados = [];
+      allRows.forEach((row, idx) => {
+        if (pagamentosSelecionados[idx]) {
+          selecionados.push(row.getData());
+        }
+      });
+
+      // Agrupa por classificação
+      const grupos = {};
+      let total = 0;
+      selecionados.forEach(row => {
+        const classif = row["Classificação"] || "Não informado";
+        grupos[classif] = grupos[classif] || [];
+        grupos[classif].push(row);
+        total += valorNumerico(row["VENCIDO"]);
+        // Para títulos do dia (não vencidos), pode somar os valores das colunas do dia, mas para BI geralmente só soma VENCIDO
+        // Se quiser somar títulos do dia, adaptar aqui
+      });
+
+      // Monta HTML do grupo/lista
+      let html = `<div class="pag-dia-lista">`;
+      Object.keys(grupos).forEach(classif => {
+        html += `<div class="grupo">${classif}</div><ul>`;
+        grupos[classif].forEach(row => {
+          html += `<li class="linha-fornec"><b>${row["Descrição do Fornecedor/Cliente"]}</b> — ${moedaBRLSemCentavos(row["VENCIDO"])}</li>`;
+        });
+        html += `</ul>`;
+      });
+      html += `</div>`;
+
+      document.getElementById("pagDiaLista").innerHTML = html;
+
+      document.getElementById("totalPagamentosDia").innerHTML =
+        "Total dos pagamentos: " + moedaBRLSemCentavos(total);
+
+      // Atualiza saldo após pagamentos
+      atualizarSaldoPosPag();
+    }
+
+    function atualizarSaldoPosPag() {
+      const saldoConta = Number(document.getElementById("saldoConta").value) || 0;
+      // Soma os pagamentos selecionados
+      const table = window.table;
+      if (!table) return;
+      const allRows = table.getRows().filter(r => !r.getData()["__isTotal"]);
+      let totalPag = 0;
+      allRows.forEach((row, idx) => {
+        if (pagamentosSelecionados[idx]) {
+          totalPag += valorNumerico(row.getData()["VENCIDO"]);
+        }
+      });
+      const saldoPos = saldoConta - totalPag;
+      const elem = document.getElementById("saldoPosPag");
+      elem.innerHTML = "Saldo após pagamentos: " +
+        (saldoPos < 0
+          ? `<span class="saldo-negativo">${moedaBRLSemCentavos(saldoPos)}</span>`
+          : moedaBRLSemCentavos(saldoPos));
     }
 
     // Busca por nome de fornecedor/cliente
