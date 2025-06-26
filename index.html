@@ -132,7 +132,6 @@
       // Descobre se há drilldown por data (ou seja, só 1 coluna de data além das chaves principais)
       const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente"];
       let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
-      // Detecta se é drilldown (ou seja, existe só 1 coluna de data visível)
       const datasVisiveis = colunasVisiveis.filter(k => /^\d{2}\/\d{2}/.test(k));
       const temDrilldownData = datasVisiveis.length === 1;
 
@@ -142,11 +141,9 @@
         dados = dados.filter(row => {
           // Mantém se houver valor tanto em VENCIDO quanto na data OU só na data
           const valorData = valorNumerico(row[nomeColunaData]);
-          const valorVencido = valorNumerico(row["VENCIDO"]);
           // Se não houver valor na data, ignora a linha
           if (valorData <= 0) return false;
           // Se houver valor na data, tanto faz ter vencido ou não: mostra
-          // (Não mostra linha se só tem valor em VENCIDO)
           return true;
         });
       }
@@ -197,19 +194,30 @@
       window.table.setLocale("pt-br");
 
       // --- Scroll horizontal sincronizado no topo (versão robusta) ---
-      setTimeout(() => {
+      function sincronizarScrollHorizontal() {
         const tabelaDiv = document.querySelector("#tabela .tabulator-tableholder");
         const scrollTopTab = document.getElementById("scrollTopTab");
         const scrollSyncTab = document.getElementById("scrollSyncTab");
-        if (tabelaDiv && scrollTopTab && scrollSyncTab) {
-          scrollSyncTab.style.width = tabelaDiv.scrollWidth + "px";
-          tabelaDiv.onscroll = null;
-          scrollTopTab.onscroll = null;
-          tabelaDiv.onscroll = () => { scrollTopTab.scrollLeft = tabelaDiv.scrollLeft; };
-          scrollTopTab.onscroll = () => { tabelaDiv.scrollLeft = scrollTopTab.scrollLeft; };
+        if (!tabelaDiv || !scrollTopTab || !scrollSyncTab) return;
+        scrollSyncTab.style.width = tabelaDiv.scrollWidth + "px";
+        tabelaDiv.onscroll = null;
+        scrollTopTab.onscroll = null;
+        let bloqueiaLoopTabela = false;
+        let bloqueiaLoopTop = false;
+        tabelaDiv.onscroll = () => {
+          if (bloqueiaLoopTabela) { bloqueiaLoopTabela = false; return; }
+          bloqueiaLoopTop = true;
+          scrollTopTab.scrollLeft = tabelaDiv.scrollLeft;
+        };
+        scrollTopTab.onscroll = () => {
+          if (bloqueiaLoopTop) { bloqueiaLoopTop = false; return; }
+          bloqueiaLoopTabela = true;
           tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
-        }
-      }, 600);
+        };
+        tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
+      }
+      setTimeout(sincronizarScrollHorizontal, 700);
+      window.addEventListener('resize', sincronizarScrollHorizontal);
     }
 
     // Inicia vazio
