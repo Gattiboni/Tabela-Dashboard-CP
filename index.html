@@ -161,6 +161,8 @@
     let dadosOriginaisGlobal = [];
     let pagamentosSelecionados = {};
 
+    // Utilitários e funções dos modais (mantém igual ao anterior)
+
     function formatarData(data) {
       if (!data) return "-";
       let d = data;
@@ -251,6 +253,8 @@
       const colunas = Object.keys(dados[0]);
       return colunas.filter(col => {
         if (colunasChave.includes(col)) return true;
+        // Não inclui 'Vencimentos Anteriores' na grid!
+        if (col === "Vencimentos Anteriores") return false;
         return dados.some(row => valorNumerico(row[col]) > 0);
       });
     }
@@ -274,7 +278,6 @@
     }
 
     function gerarColunasDinamicas(dados, colunasVisiveis) {
-      if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
       let baseCols = colunasVisiveis.map(key => {
         if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false };
@@ -380,15 +383,16 @@
       return baseCols;
     }
 
-    function marcarPagamentosDoDia(rows, colunasVisiveis) {
+    function marcarPagamentosDoDia(dados, colunasVisiveis) {
       pagamentosSelecionados = {};
-      // Pega colunas de datas que estão visíveis (coluna chave: dia/mês)
       const colDatas = colunasVisiveis.filter(col => /^\d{2}\/\d{2}/.test(col));
       const hoje = new Date();
       hoje.setHours(0,0,0,0);
-      rows.forEach((row, idx) => {
-        // Se a linha não é de totais e alguma coluna data == hoje e valor > 0, marca como selecionada
+      dados.forEach((row, idx) => {
         if (row["__isTotal"]) return;
+        // Marcar se valor HOJE > 0 em qualquer coluna data OU VENCIDO (caso data hoje seja vencido)
+        let marcou = false;
+        // Verifica colunas de datas
         for (const col of colDatas) {
           if (valorNumerico(row[col]) > 0) {
             const [dia, mes] = col.split("/");
@@ -397,10 +401,16 @@
               parseInt(mes) === hoje.getMonth() + 1
             ) {
               pagamentosSelecionados[idx] = true;
-              return; // Já marcou, não precisa checar outras datas
+              marcou = true;
+              break;
             }
           }
         }
+        // Opcional: Se título já está vencido HOJE, pode marcar em "VENCIDO" também
+        // (Se não quiser isso, comente abaixo)
+        // if (!marcou && valorNumerico(row["VENCIDO"]) > 0) {
+        //   pagamentosSelecionados[idx] = true;
+        // }
       });
     }
 
@@ -415,6 +425,7 @@
       if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) {
         document.querySelector("#tabela").innerHTML = 'Nenhum dado encontrado.';
         document.getElementById("scrollTopTab").style.display = "none";
+        document.getElementById("btnConfirmarPagDia").style.display = "none";
         return;
       }
 
@@ -427,6 +438,10 @@
 
       const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente", "__historico", "__pagdia"];
       let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
+
+      // Corrige: Nunca renderiza coluna 'Vencimentos Anteriores'
+      colunasVisiveis = colunasVisiveis.filter(c => c !== "Vencimentos Anteriores");
+
       const datasVisiveis = colunasVisiveis.filter(k => /^\d{2}\/\d{2}/.test(k));
       const temDrilldownData = datasVisiveis.length === 1;
       if (temDrilldownData) {
@@ -434,6 +449,7 @@
         dados = dados.filter(row => valorNumerico(row[nomeColunaData]) > 0);
       }
       colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
+      colunasVisiveis = colunasVisiveis.filter(c => c !== "Vencimentos Anteriores");
 
       dados = dados.filter(row => isLinhaComValor(row, colunasVisiveis, colunasChave));
 
@@ -484,8 +500,13 @@
       document.querySelectorAll(".checkbox-pagamento").forEach(cb => {
         const idx = cb.getAttribute("data-rowid");
         cb.checked = !!pagamentosSelecionados[idx];
+        cb.onchange = function() {
+          pagamentosSelecionados[idx] = cb.checked;
+          atualizarBotaoPagDia();
+        };
       });
     }
+
     function atualizarBotaoPagDia() {
       const btn = document.getElementById("btnConfirmarPagDia");
       const table = window.table;
