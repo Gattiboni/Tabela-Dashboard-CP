@@ -125,6 +125,25 @@
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
+    // Utilitário: Formata data para DD/MM/AA (aceita Date ou string tipo '2024-06-27' ou '27/06/2024')
+    function formatarData(data) {
+      if (!data) return "-";
+      // Se já está no formato certo
+      if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(data)) {
+        // Força para 2 dígitos finais como AA
+        let partes = data.split('/');
+        let ano = partes[2].slice(-2);
+        return partes[0].padStart(2,'0') + '/' + partes[1].padStart(2,'0') + '/' + ano;
+      }
+      // Se no formato ISO ou Date
+      let d = new Date(data);
+      if (isNaN(d)) return data; // retorna o original se não é data parseável
+      let dia = String(d.getDate()).padStart(2, '0');
+      let mes = String(d.getMonth() + 1).padStart(2, '0');
+      let ano = String(d.getFullYear()).slice(-2);
+      return dia + '/' + mes + '/' + ano;
+    }
+
     // Modal Histórico (leitura)
     function abrirModalHistorico(html) {
       document.getElementById('historicoConteudo').innerHTML = html;
@@ -140,10 +159,8 @@
       document.getElementById('ed_comentario').value = "";
       document.getElementById('ed_vencimento').value = "";
       document.getElementById('modalEdicaoOverlay').style.display = 'flex';
-      // Handler submit
       document.getElementById('formEdicaoHistorico').onsubmit = function(e) {
         e.preventDefault();
-        // Simplesmente loga os dados por enquanto
         const registro = {
           fornecedor: rowData["Descrição do Fornecedor/Cliente"],
           classificacao: rowData["Classificação"],
@@ -159,7 +176,6 @@
     function fecharModalEdicao() {
       document.getElementById('modalEdicaoOverlay').style.display = 'none';
     }
-    // Fecha ao clicar fora
     window.onclick = function(event) {
       if (event.target === document.getElementById('modalHistoricoOverlay')) fecharModalHistorico();
       if (event.target === document.getElementById('modalEdicaoOverlay')) fecharModalEdicao();
@@ -276,6 +292,8 @@
             <label>Classificação:</label> ${rowData["Classificação"] || "-"}
             <br>
             <label>Valor Vencido:</label> ${moedaBRLSemCentavos({getValue: ()=>rowData["VENCIDO"]})}
+            <br>
+            <label>Data Vencimento Original:</label> ${formatarData(rowData["Data"])}
           `);
         }
       };
