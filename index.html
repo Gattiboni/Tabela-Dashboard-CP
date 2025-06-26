@@ -3,112 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <title>Tabela Detalhamento</title>
-  <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
+  <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; background: #faf9f6; }
-    #scrollTopTab { overflow-x: auto; width: 100%; height: 16px; margin-bottom: 4px; background: #faf9f6; }
+    #container { width: 100%; max-width: 1800px; margin: 20px auto; padding: 10px; }
+    #scrollTopTab { width: 100%; overflow-x: auto; margin-bottom: 5px; border: 1px solid #ddd; border-radius: 4px; background: #faf9f6; }
     #scrollSyncTab { height: 1px; }
     #tabela { margin-top: 0px; }
-    .tabulator .tabulator-group {
-      background: #e3e6ed;
-      font-weight: bold;
-    }
-    .linha-totais {
-      background: #f6e6b3 !important;
-      font-weight: bold;
-    }
+    .tabulator .tabulator-group { background: #e3e6ed; font-weight: bold; }
+    .linha-totais { background: #f6e6b3 !important; font-weight: bold; }
+    /* Estiliza o scroll da barra fake para experiência visual mais rica */
+    #scrollTopTab::-webkit-scrollbar { height: 10px; }
+    #scrollTopTab::-webkit-scrollbar-track { background: #f1f1f1; }
+    #scrollTopTab::-webkit-scrollbar-thumb { background: #888; border-radius: 5px; }
+    #scrollTopTab::-webkit-scrollbar-thumb:hover { background: #555; }
+    /* Opcional: aumenta a altura do scroll inferior da tabela */
+    #tabela .tabulator-tableholder::-webkit-scrollbar { height: 10px; }
   </style>
 </head>
 <body>
-  <h2>Tabela Detalhamento</h2>
-  <div id="scrollTopTab">
-    <div id="scrollSyncTab" style="width: 3000px; height: 1px;"></div>
+  <div id="container">
+    <div id="scrollTopTab">
+      <div id="scrollSyncTab"></div>
+    </div>
+    <div id="tabela"></div>
   </div>
-  <div id="tabela"></div>
-
-  <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Exemplo de dados e colunas (substitua pelo seu contexto real, Appsmith envia via postMessage)
-    let yourData = [];    // Inicial vazio
-    let yourColumns = []; // Inicial vazio
+    // Inicializa vazio, a tabela só recebe dados via postMessage do Appsmith
+    let table;
+    let isScrolling = false;
 
-    // Inicialização básica (será refeito via postMessage, pode sobrescrever)
-    const table = new Tabulator("#tabela", {
-      data: yourData,
-      columns: yourColumns,
-      layout: "fitDataStretch",
-      height: "auto",
-      placeholder: "Nenhum dado encontrado.",
-      groupBy: "Classificação",
-      groupStartOpen: true,
-      groupHeader: function(value, count, data) {
-        return value ? value + " (" + count + ")" : "";
-      },
-      rowFormatter: function(row) {
-        const data = row.getData();
-        if (data["__isTotal"]) {
-          row.getElement().classList.add("linha-totais");
+    // Função para sincronizar as barras de rolagem
+    function syncScrollBars() {
+      const tabelaDiv = document.querySelector("#tabela .tabulator-tableholder");
+      const scrollTopTab = document.getElementById("scrollTopTab");
+      const scrollSyncTab = document.getElementById("scrollSyncTab");
+
+      // Atualiza largura do scroll fake
+      function updateSyncWidth() {
+        if (tabelaDiv) {
+          scrollSyncTab.style.width = tabelaDiv.scrollWidth + "px";
         }
       }
+
+      // Sincroniza rolagem
+      function syncScroll(source, target) {
+        if (!isScrolling) {
+          isScrolling = true;
+          target.scrollLeft = source.scrollLeft;
+          setTimeout(() => isScrolling = false, 10);
+        }
+      }
+
+      // Remove listeners antigos para evitar múltiplos binds
+      tabelaDiv?.removeEventListener('scroll', tabelaDiv.__syncHandler__);
+      scrollTopTab?.removeEventListener('scroll', scrollTopTab.__syncHandler__);
+
+      // Define e armazena os handlers para facilitar remoção futura
+      tabelaDiv.__syncHandler__ = () => syncScroll(tabelaDiv, scrollTopTab);
+      scrollTopTab.__syncHandler__ = () => syncScroll(scrollTopTab, tabelaDiv);
+
+      // Adiciona listeners de novo
+      tabelaDiv?.addEventListener('scroll', tabelaDiv.__syncHandler__);
+      scrollTopTab?.addEventListener('scroll', scrollTopTab.__syncHandler__);
+
+      // Atualiza largura inicial
+      updateSyncWidth();
+
+      // Retorna função para atualizar largura após render/data/resize
+      return updateSyncWidth;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // Inicializa com colunas e dados vazios, será populado pelo Appsmith
+      table = new Tabulator("#tabela", {
+        height: 420,
+        layout: "fitDataStretch",
+        columns: [],
+        data: [],
+        placeholder: "Nenhum dado encontrado.",
+        groupBy: "Classificação",
+        groupStartOpen: true,
+        groupHeader: function(value, count, data) {
+          return value ? value + " (" + count + ")" : "";
+        },
+        rowFormatter: function(row) {
+          const data = row.getData();
+          if (data && data["__isTotal"]) {
+            row.getElement().classList.add("linha-totais");
+          }
+        }
+      });
+
+      // Sincroniza scroll assim que tabela existir
+      let updateScrollSync = syncScrollBars();
+
+      // Atualiza largura do fake scroll ao reconstruir tabela/dados/colunas
+      table.on("tableBuilt", updateScrollSync);
+      table.on("columnResized", updateScrollSync);
+      table.on("dataLoaded", updateScrollSync);
+
+      // Atualiza largura ao redimensionar janela
+      window.addEventListener('resize', updateScrollSync);
+
+      // Recebe dados e colunas do Appsmith via postMessage
+      window.addEventListener('message', function(event) {
+        let parsed;
+        if (event.data && typeof event.data === "string") {
+          try { parsed = JSON.parse(event.data); } catch (e) { parsed = null; }
+        } else if (event.data && typeof event.data === "object" && event.data !== null) {
+          parsed = event.data;
+        }
+
+        // Espera estrutura {columns: [...], data: [...]}, ou só um array (dados)
+        if (parsed && Array.isArray(parsed.data) && Array.isArray(parsed.columns)) {
+          table.setColumns(parsed.columns);
+          table.setData(parsed.data).then(() => {
+            updateScrollSync();
+            document.querySelector("#tabela .tabulator-tableholder").scrollLeft = 0;
+            document.getElementById("scrollTopTab").scrollLeft = 0;
+          });
+        } else if (parsed && Array.isArray(parsed)) {
+          table.setData(parsed).then(() => {
+            updateScrollSync();
+            document.querySelector("#tabela .tabulator-tableholder").scrollLeft = 0;
+            document.getElementById("scrollTopTab").scrollLeft = 0;
+          });
+        }
+      });
     });
-
-    // Referências DOM (depois que Tabulator existir!)
-    const scrollTopTab = document.getElementById("scrollTopTab");
-    const scrollSyncTab = document.getElementById("scrollSyncTab");
-    let tabelaHolder = null;
-
-    // --- Função: Atualiza largura do scroll fake para igualar à tabela ---
-    function updateScrollWidth() {
-      tabelaHolder = table.element.querySelector(".tabulator-tableholder");
-      if (tabelaHolder && scrollSyncTab) {
-        scrollSyncTab.style.width = `${tabelaHolder.scrollWidth}px`;
-      }
-    }
-
-    // --- Sincroniza scrolls (tabela <-> barra fake superior) ---
-    function syncFakeToTable() {
-      if (tabelaHolder) {
-        tabelaHolder.scrollLeft = scrollTopTab.scrollLeft;
-      }
-    }
-    function syncTableToFake(left) {
-      scrollTopTab.removeEventListener("scroll", syncFakeToTable);
-      scrollTopTab.scrollLeft = left;
-      scrollTopTab.addEventListener("scroll", syncFakeToTable);
-    }
-
-    // --- Evento: Scroll real movimenta fake
-    table.on("scrollHorizontal", syncTableToFake);
-
-    // --- Evento: Scroll fake movimenta real
-    scrollTopTab.addEventListener("scroll", syncFakeToTable);
-
-    // --- Resize e rebuild: atualiza largura da barra fake
-    table.on("dataLoaded", updateScrollWidth);
-    table.on("renderComplete", updateScrollWidth);
-    table.on("tableBuilt", updateScrollWidth);
-    window.addEventListener('resize', updateScrollWidth);
-
-    // --- postMessage: atualiza dados da tabela e barra fake ---
-    window.addEventListener("message", function(event) {
-      let dados = null;
-      if (event.data && typeof event.data === "string") {
-        try { dados = JSON.parse(event.data); } catch(e) {}
-      } else if (event.data && Array.isArray(event.data)) {
-        dados = event.data;
-      }
-      if (dados && Array.isArray(dados)) {
-        // Atualiza tabela
-        table.replaceData(dados).then(() => {
-          updateScrollWidth();
-          if (tabelaHolder) tabelaHolder.scrollLeft = 0;
-          scrollTopTab.scrollLeft = 0;
-        });
-      }
-    }, false);
-
-    // --- Inicial: deixa barra fake correta (se tabela vier vazia) ---
-    setTimeout(updateScrollWidth, 700);
   </script>
 </body>
 </html>
