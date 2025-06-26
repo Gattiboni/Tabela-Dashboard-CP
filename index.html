@@ -6,16 +6,32 @@
   <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; background: #faf9f6; }
-    #scrollTopTab { overflow-x: auto; width: 100%; height: 16px; margin-bottom: 4px; border: 1px solid #ddd; border-radius: 4px; background: #faf9f6; }
-    #scrollSyncTab { height: 1px; }
+    #scrollTopTab { 
+      overflow-x: auto; 
+      width: 100%; 
+      height: 16px; 
+      margin-bottom: 4px; 
+      border: 1px solid #ddd; 
+      border-radius: 4px; 
+      background: #f8f9fa;
+      display: block;
+    }
+    #scrollSyncTab { 
+      height: 1px; 
+      background: transparent;
+      min-width: 100px;
+    }
     #tabela { margin-top: 0px; }
     .tabulator .tabulator-group { background: #e3e6ed; font-weight: bold; }
     .linha-totais { background: #f6e6b3 !important; font-weight: bold; }
-    #scrollTopTab::-webkit-scrollbar { height: 10px; }
-    #scrollTopTab::-webkit-scrollbar-track { background: #f1f1f1; }
-    #scrollTopTab::-webkit-scrollbar-thumb { background: #888; border-radius: 5px; }
+    #scrollTopTab::-webkit-scrollbar { height: 12px; }
+    #scrollTopTab::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 6px; }
+    #scrollTopTab::-webkit-scrollbar-thumb { background: #888; border-radius: 6px; border: 1px solid #f1f1f1; }
     #scrollTopTab::-webkit-scrollbar-thumb:hover { background: #555; }
-    #tabela .tabulator-tableholder::-webkit-scrollbar { height: 10px; }
+    #tabela .tabulator-tableholder::-webkit-scrollbar { height: 12px; }
+    #tabela .tabulator-tableholder::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 6px; }
+    #tabela .tabulator-tableholder::-webkit-scrollbar-thumb { background: #888; border-radius: 6px; border: 1px solid #f1f1f1; }
+    #tabela .tabulator-tableholder::-webkit-scrollbar-thumb:hover { background: #555; }
   </style>
 </head>
 <body>
@@ -27,7 +43,7 @@
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Funções utilitárias (iguais às suas)
+    // Utilitários padrão Openeem
     function calcTextWidth(text, font = "14px Arial") {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -105,62 +121,75 @@
       return total;
     }
 
-    // --- Scroll Topo sincronizado (robusto) ---
-    function setupScrollSync() {
-      const tabelaDiv = document.querySelector("#tabela .tabulator-tableholder");
+    // Sincroniza e estiliza scroll fake (definitivo)
+    function setupScrollSync(table) {
       const scrollTopTab = document.getElementById("scrollTopTab");
       const scrollSyncTab = document.getElementById("scrollSyncTab");
-      if (!tabelaDiv || !scrollTopTab || !scrollSyncTab) return;
+      if (!table || !scrollTopTab || !scrollSyncTab) return;
 
-      // Atualiza largura da barra fake
-      scrollSyncTab.style.width = tabelaDiv.scrollWidth + "px";
+      // Função que atualiza largura do fake scrollbar e mostra/esconde
+      function updateScrollbarWidth() {
+        const tableholder = table.element.querySelector(".tabulator-tableholder");
+        if (tableholder) {
+          const scrollWidth = tableholder.scrollWidth;
+          const clientWidth = tableholder.clientWidth;
+          if (scrollWidth > clientWidth) {
+            scrollSyncTab.style.width = scrollWidth + "px";
+            scrollTopTab.style.display = "block";
+          } else {
+            scrollTopTab.style.display = "none";
+          }
+        }
+      }
+      updateScrollbarWidth();
 
-      // Remove listeners antigos para evitar loops
-      tabelaDiv.onscroll = null;
+      // Remove listeners antigos e previne loop
       scrollTopTab.onscroll = null;
+      table.off("scrollHorizontal");
+      table.on("scrollHorizontal", function(left) {
+        scrollTopTab.onscroll = null;
+        scrollTopTab.scrollLeft = left;
+        setTimeout(() => {
+          scrollTopTab.onscroll = syncFromFakeToTable;
+        }, 0);
+      });
 
-      let bloqueioTabela = false;
-      let bloqueioTop = false;
+      // Fake controla real
+      function syncFromFakeToTable() {
+        const tableholder = table.element.querySelector(".tabulator-tableholder");
+        if (tableholder) {
+          tableholder.scrollLeft = scrollTopTab.scrollLeft;
+        }
+      }
+      scrollTopTab.onscroll = syncFromFakeToTable;
 
-      tabelaDiv.onscroll = () => {
-        if (bloqueioTabela) { bloqueioTabela = false; return; }
-        bloqueioTop = true;
-        scrollTopTab.scrollLeft = tabelaDiv.scrollLeft;
-      };
-      scrollTopTab.onscroll = () => {
-        if (bloqueioTop) { bloqueioTop = false; return; }
-        bloqueioTabela = true;
-        tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
-      };
-
-      // Inicializa sincronizado
-      tabelaDiv.scrollLeft = scrollTopTab.scrollLeft;
+      // Atualiza largura em eventos de ciclo de vida
+      table.on("renderComplete", updateScrollbarWidth);
+      table.on("dataLoaded", updateScrollbarWidth);
+      table.on("columnResized", updateScrollbarWidth);
     }
 
-    // --- Render principal da tabela ---
+    // Render principal
     function drawTable(dadosOriginais) {
+      if (window.table) {
+        window.table.destroy();
+        window.table = null;
+      }
+      document.querySelector("#tabela").innerHTML = "";
+
       if (!dadosOriginais || !Array.isArray(dadosOriginais) || dadosOriginais.length === 0) {
-        // Se não houver dados, destrói tabela anterior se existir e mostra placeholder
-        if (window.table) {
-          window.table.setData([]);
-          window.table.destroy();
-        }
-        document.querySelector("#tabela").innerHTML = '<div style="padding: 60px;text-align: center; color: #888; font-size: 2rem; background: #8882;">Nenhum dado encontrado.</div>';
-        setupScrollSync();
+        document.querySelector("#tabela").innerHTML = 'Nenhum dado encontrado.';
+        document.getElementById("scrollTopTab").style.display = "none";
         return;
       }
 
-      // Remove linhas sem "Classificação"
       let dados = dadosOriginais.filter(row =>
         row["Classificação"] !== undefined &&
         row["Classificação"] !== null &&
         row["Classificação"].toString().trim() !== ""
       ).map(row => ({ ...row }));
-
-      // Remove colunas "fantasma"
       dados.forEach(row => { if ("_isTotal" in row) delete row["_isTotal"]; });
 
-      // Drilldown: só mostra linha se houver valor relevante na data (já validado)
       const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente"];
       let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
       const datasVisiveis = colunasVisiveis.filter(k => /^\d{2}\/\d{2}/.test(k));
@@ -171,23 +200,11 @@
       }
       colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
 
-      // Linha de totais
       const linhaTotais = calcularLinhaTotais(dados, colunasVisiveis);
       dados.unshift(linhaTotais);
-
-      // Remove __isTotal da exibição
       colunasVisiveis = colunasVisiveis.filter(col => col !== "__isTotal");
-
       const columns = gerarColunasDinamicas(dados, colunasVisiveis);
 
-      // Limpa tabela antiga
-      if (window.table) {
-        window.table.setData([]);
-        window.table.destroy();
-      }
-      document.querySelector("#tabela").innerHTML = "";
-
-      // Cria nova tabela
       window.table = new Tabulator("#tabela", {
         data: dados,
         columns: columns,
@@ -215,13 +232,12 @@
         }
       });
       window.table.setLocale("pt-br");
-
-      // --- Scroll sync ---
-      setTimeout(setupScrollSync, 500);
-      window.addEventListener('resize', setupScrollSync);
+      window.table.on("tableBuilt", function() {
+        setupScrollSync(window.table);
+      });
     }
 
-    // Inicia vazio
+    // Inicializa vazio
     drawTable([]);
 
     // Recebe dados do Appsmith via postMessage
@@ -235,6 +251,10 @@
         console.error("Erro ao processar dados recebidos:", e);
       }
     }, false);
+
+    window.addEventListener('resize', function() {
+      if (window.table) setTimeout(() => setupScrollSync(window.table), 100);
+    });
   </script>
 </body>
 </html>
