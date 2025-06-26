@@ -67,7 +67,6 @@
       const colunas = Object.keys(dados[0]);
       return colunas.filter(col => {
         if (colunasChave.includes(col)) return true;
-        // Se todos os valores forem "" ou zero, não exibe a coluna
         return dados.some(row => valorNumerico(row[col]) > 0);
       });
     }
@@ -114,7 +113,6 @@
           total[k] = dados.reduce((acc, row) => acc + valorNumerico(row[k]), 0) || "";
         }
       });
-      // NÃO inclui _isTotal na linha de dados (apenas para styling)
       total["__isTotal"] = true;
       return total;
     }
@@ -131,14 +129,30 @@
       // Remove colunas "fantasma" (ex: _isTotal)
       dados.forEach(row => { if ("_isTotal" in row) delete row["_isTotal"]; });
 
-      // Remove colunas que só têm valor zero/vazio (menos chaves principais)
+      // Descobre se há drilldown por data (ou seja, só 1 coluna de data além das chaves principais)
       const colunasChave = ["Classificação", "Descrição do Fornecedor/Cliente", "Fornecedor/Cliente"];
       let colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
+      // Detecta se é drilldown (ou seja, existe só 1 coluna de data visível)
+      const datasVisiveis = colunasVisiveis.filter(k => /^\d{2}\/\d{2}/.test(k));
+      const temDrilldownData = datasVisiveis.length === 1;
 
-      // Se só sobrar colunas-chave, não mostra nenhuma coluna de valor
-      if (colunasVisiveis.length === colunasChave.length) {
-        // Não mostra nada (ou só header, se desejar)
+      // --- FILTRO AVANÇADO PARA NÃO TRAZER SÓ VENCIDO ---
+      if (temDrilldownData) {
+        const nomeColunaData = datasVisiveis[0];
+        dados = dados.filter(row => {
+          // Mantém se houver valor tanto em VENCIDO quanto na data OU só na data
+          const valorData = valorNumerico(row[nomeColunaData]);
+          const valorVencido = valorNumerico(row["VENCIDO"]);
+          // Se não houver valor na data, ignora a linha
+          if (valorData <= 0) return false;
+          // Se houver valor na data, tanto faz ter vencido ou não: mostra
+          // (Não mostra linha se só tem valor em VENCIDO)
+          return true;
+        });
       }
+
+      // Remove colunas que ficaram vazias após o filtro
+      colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
 
       // Linha de totais
       const linhaTotais = calcularLinhaTotais(dados, colunasVisiveis);
