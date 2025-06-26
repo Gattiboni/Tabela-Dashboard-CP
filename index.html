@@ -14,6 +14,58 @@
     .icone-historico { font-size: 18px; cursor: pointer; text-align: center; display: block; margin: 0 auto; }
     .icone-historico.com-historico { color: #0074D9; }
     .icone-historico.sem-historico { color: #AAA; }
+
+    /* Modal customizado */
+    #modalHistoricoOverlay {
+      display: none;
+      position: fixed;
+      z-index: 1002;
+      left: 0; top: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.32);
+      justify-content: center; align-items: center;
+    }
+    #modalHistoricoBox {
+      background: #fff;
+      border-radius: 10px;
+      max-width: 370px;
+      min-width: 260px;
+      padding: 28px 24px 20px 24px;
+      box-shadow: 0 12px 36px #2222;
+      text-align: left;
+      position: relative;
+      font-size: 1.08rem;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: modalIn 0.16s;
+    }
+    #modalHistoricoBox .fechar-modal {
+      position: absolute;
+      right: 16px;
+      top: 12px;
+      font-size: 1.3rem;
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      transition: color .2s;
+    }
+    #modalHistoricoBox .fechar-modal:hover { color: #b00; }
+    #modalHistoricoBox h3 {
+      font-size: 1.15rem;
+      margin: 0 0 8px 0;
+      color: #304574;
+      font-weight: 600;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(32px);}
+      to   { opacity: 1; transform: translateY(0);}
+    }
+    #modalHistoricoBox label {
+      font-weight: 500;
+      margin-right: 3px;
+      color: #757575;
+    }
   </style>
 </head>
 <body>
@@ -23,16 +75,42 @@
   </div>
   <div id="tabela"></div>
 
+  <!-- Modal Histórico -->
+  <div id="modalHistoricoOverlay">
+    <div id="modalHistoricoBox">
+      <button class="fechar-modal" onclick="fecharModalHistorico()">×</button>
+      <h3>Histórico do Fornecedor</h3>
+      <div id="historicoConteudo">
+        <!-- Conteúdo do histórico aparece aqui -->
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // === Utilitários padrão ===
-    function calcTextWidth(text, font = "14px Arial") {
+    // Modal control
+    function abrirModalHistorico(html) {
+      document.getElementById('historicoConteudo').innerHTML = html;
+      document.getElementById('modalHistoricoOverlay').style.display = 'flex';
+    }
+    function fecharModalHistorico() {
+      document.getElementById('modalHistoricoOverlay').style.display = 'none';
+    }
+    // Fecha ao clicar fora
+    window.onclick = function(event) {
+      if (event.target === document.getElementById('modalHistoricoOverlay')) {
+        fecharModalHistorico();
+      }
+    };
+
+    // Utilitários padrão
+    function calcTextWidth(text, font = "14px Arial") { /* ... igual antes ... */ 
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
       ctx.font = font;
       return ctx.measureText(text).width;
     }
-    function moedaBRLSemCentavos(cell) {
+    function moedaBRLSemCentavos(cell) { /* ... igual antes ... */
       const value = cell.getValue();
       if (typeof value !== "number" || isNaN(value)) return "";
       return value.toLocaleString("pt-BR", {
@@ -42,7 +120,7 @@
         maximumFractionDigits: 0
       });
     }
-    function valorNumerico(str) {
+    function valorNumerico(str) { /* ... igual antes ... */
       if (typeof str === "number") return str;
       if (!str) return 0;
       return parseFloat(
@@ -52,7 +130,7 @@
           .replace(",", ".")
       ) || 0;
     }
-    function filtrarColunasUteis(dados, colunasChave) {
+    function filtrarColunasUteis(dados, colunasChave) { /* ... igual antes ... */
       if (!dados.length) return [];
       const colunas = Object.keys(dados[0]);
       return colunas.filter(col => {
@@ -60,7 +138,7 @@
         return dados.some(row => valorNumerico(row[col]) > 0);
       });
     }
-    function calcularLinhaTotais(dados, colunasVisiveis) {
+    function calcularLinhaTotais(dados, colunasVisiveis) { /* ... igual antes ... */
       if (!dados || !Array.isArray(dados) || dados.length === 0) return {};
       const total = {};
       colunasVisiveis.forEach(k => {
@@ -74,12 +152,11 @@
       return total;
     }
 
-    // === NOVA FUNÇÃO gerarColunasDinamicas com ícone de histórico como PRIMEIRA coluna ===
+    // Colunas: ícone de histórico como PRIMEIRA coluna
     function gerarColunasDinamicas(dados, colunasVisiveis) {
       if (!dados || !Array.isArray(dados) || dados.length === 0) return [];
       const font = "14px Arial";
 
-      // 1. Gera as colunas padrão normalmente
       let baseCols = colunasVisiveis.map(key => {
         if (key === "Fornecedor/Cliente") return { title: key, field: key, visible: false };
         if (["Descrição do Fornecedor/Cliente"].includes(key)) return { title: key, field: key, width: 180 };
@@ -106,7 +183,6 @@
         return { title: key, field: key, width: 150 };
       });
 
-      // 2. Cria a coluna do ícone como PRIMEIRA
       const historicoCol = {
         title: "",
         field: "__historico",
@@ -116,20 +192,24 @@
         resizable: false,
         cssClass: "col-historico",
         formatter: function(cell) {
-          // Aqui, depois mudamos para detectar histórico real
           return `<span class="icone-historico sem-historico" title="Ver histórico">&#128172;</span>`;
         },
         cellClick: function(e, cell) {
-          alert("Histórico para: " + cell.getRow().getData()["Descrição do Fornecedor/Cliente"]);
+          // Aqui vai o modal, com dados reais (por enquanto, só fornecedor)
+          const rowData = cell.getRow().getData();
+          abrirModalHistorico(`
+            <label>Fornecedor:</label> <b>${rowData["Descrição do Fornecedor/Cliente"] || "-"}</b>
+            <br>
+            <label>Classificação:</label> ${rowData["Classificação"] || "-"}
+            <br>
+            <label>Valor Vencido:</label> ${moedaBRLSemCentavos({getValue: ()=>rowData["VENCIDO"]})}
+          `);
         }
       };
-      // Insere como PRIMEIRA coluna
       baseCols.unshift(historicoCol);
-
       return baseCols;
     }
 
-    // === Restante do código: drawTable, setupScrollSync, etc ===
     function drawTable(dadosOriginais) {
       if (window.table) {
         window.table.destroy();
