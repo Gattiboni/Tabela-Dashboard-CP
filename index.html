@@ -81,6 +81,8 @@
     .modalBox button[type=submit]:hover { background: #0d4690; }
     .historico-alteracoes { margin-top: 12px; padding: 9px 13px; background: #f6f7fa; border-radius: 7px; font-size: .99rem; color: #305; }
     .historico-alteracoes label { color: #457; font-weight: 600; }
+    .lista-venc { margin: 5px 0 0 0; padding: 0 0 0 8px; }
+    .lista-venc li { margin-bottom: 2px; font-size: 1.02rem; }
   </style>
 </head>
 <body>
@@ -287,6 +289,12 @@
         },
         cellClick: function(e, cell) {
           const rowData = cell.getRow().getData();
+          // Lista todos os vencimentos anteriores (array)
+          let vencimentos = rowData["Vencimentos Anteriores"];
+          let vencHtml = "-";
+          if (Array.isArray(vencimentos) && vencimentos.length > 0) {
+            vencHtml = `<ul class="lista-venc">${vencimentos.map(v => `<li>${v}</li>`).join("")}</ul>`;
+          }
           abrirModalHistorico(`
             <label>Fornecedor:</label> <b>${rowData["Descrição do Fornecedor/Cliente"] || "-"}</b>
             <br>
@@ -294,7 +302,7 @@
             <br>
             <label>Valor Vencido:</label> ${moedaBRLSemCentavos({getValue: ()=>rowData["VENCIDO"]})}
             <br>
-            <label>Data Vencimento:</label> ${formatarData(rowData["Vencimento Programado"])}
+            <label>Vencimentos Anteriores:</label> ${vencHtml}
             <div class="historico-alteracoes">
               <label>Histórico de Alterações:</label>
               <br>
