@@ -6,6 +6,7 @@
   <link href="https://unpkg.com/tabulator-tables@5.4.4/dist/css/tabulator.min.css" rel="stylesheet">
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; background: #faf9f6; }
+    #searchBar { width: 340px; font-size: 1.08rem; margin-bottom: 12px; padding: 5px 10px; border-radius: 7px; border: 1px solid #bbb; }
     #scrollTopTab { overflow-x: auto; width: 100%; height: 16px; margin-bottom: 4px; border: 1px solid #ddd; border-radius: 4px; background: #faf9f6; }
     #scrollSyncTab { height: 1px; }
     #tabela { margin-top: 0px; }
@@ -14,7 +15,6 @@
     .icone-historico { font-size: 18px; cursor: pointer; text-align: center; display: block; margin: 0 auto; }
     .icone-historico.com-historico { color: #0074D9; }
     .icone-historico.sem-historico { color: #AAA; }
-    /* Modal customizado */
     .modalOverlay {
       display: none;
       position: fixed;
@@ -26,7 +26,7 @@
     .modalBox {
       background: #fff;
       border-radius: 10px;
-      max-width: 390px;
+      max-width: 410px;
       min-width: 260px;
       padding: 28px 24px 20px 24px;
       box-shadow: 0 12px 36px #2222;
@@ -50,7 +50,7 @@
       transition: color .2s;
     }
     .modalBox .fechar-modal:hover { color: #b00; }
-    .modalBox h3 { font-size: 1.15rem; margin: 0 0 8px 0; color: #304574; font-weight: 600; }
+    .modalBox h3 { font-size: 1.13rem; margin: 0 0 8px 0; color: #304574; font-weight: 600; }
     @keyframes modalIn { from { opacity: 0; transform: translateY(32px);} to { opacity: 1; transform: translateY(0);} }
     .modalBox label { font-weight: 500; margin-right: 3px; color: #757575; }
     .modalBox input, .modalBox textarea, .modalBox select {
@@ -79,10 +79,13 @@
       transition: background .18s;
     }
     .modalBox button[type=submit]:hover { background: #0d4690; }
+    .historico-alteracoes { margin-top: 12px; padding: 9px 13px; background: #f6f7fa; border-radius: 7px; font-size: .99rem; color: #305; }
+    .historico-alteracoes label { color: #457; font-weight: 600; }
   </style>
 </head>
 <body>
   <h2>Tabela Detalhamento</h2>
+  <input id="searchBar" type="text" placeholder="🔍 Buscar Fornecedor/Cliente..." oninput="filtrarPorNome()" autocomplete="off" />
   <div id="scrollTopTab">
     <div id="scrollSyncTab"></div>
   </div>
@@ -125,10 +128,10 @@
 
   <script src="https://unpkg.com/tabulator-tables@5.4.4/dist/js/tabulator.min.js"></script>
   <script>
-    // Utilitário: Formata data para DD/MM/AA
+    let dadosOriginaisGlobal = []; // Para busca geral
+
     function formatarData(data) {
       if (!data) return "-";
-      // Aceita "2028-11-25 0:00:00" ou Date ou "YYYY-MM-DD"
       let d = data;
       if (typeof data === "string") {
         if (data.includes(" ")) d = data.split(" ")[0];
@@ -284,7 +287,6 @@
         },
         cellClick: function(e, cell) {
           const rowData = cell.getRow().getData();
-          // Busca vencimento original: "Data Vencto."
           abrirModalHistorico(`
             <label>Fornecedor:</label> <b>${rowData["Descrição do Fornecedor/Cliente"] || "-"}</b>
             <br>
@@ -292,7 +294,12 @@
             <br>
             <label>Valor Vencido:</label> ${moedaBRLSemCentavos({getValue: ()=>rowData["VENCIDO"]})}
             <br>
-            <label>Data Vencimento Original:</label> ${formatarData(rowData["Data Vencto."])}
+            <label>Data Vencimento:</label> ${formatarData(rowData["Vencimento Programado"])}
+            <div class="historico-alteracoes">
+              <label>Histórico de Alterações:</label>
+              <br>
+              <span style="color:#555">Nenhuma alteração registrada ainda.</span>
+            </div>
           `);
         }
       };
@@ -301,6 +308,7 @@
     }
 
     function drawTable(dadosOriginais) {
+      dadosOriginaisGlobal = dadosOriginais || [];
       if (window.table) {
         window.table.destroy();
         window.table = null;
@@ -367,6 +375,22 @@
       window.table.on("tableBuilt", function() {
         setupScrollSync(window.table);
       });
+    }
+
+    // Busca por nome de fornecedor/cliente
+    function filtrarPorNome() {
+      let termo = document.getElementById("searchBar").value.trim().toLowerCase();
+      if (!window.table) return;
+      if (!termo) {
+        window.table.clearFilter();
+        return;
+      }
+      window.table.setFilter([
+        [
+          { field: "Descrição do Fornecedor/Cliente", type: "like", value: termo },
+          { field: "Fornecedor/Cliente", type: "like", value: termo }
+        ]
+      ]);
     }
 
     function setupScrollSync(table) {
