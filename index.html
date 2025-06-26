@@ -128,12 +128,13 @@
     // Utilitário: Formata data para DD/MM/AA
     function formatarData(data) {
       if (!data) return "-";
-      if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(data)) {
-        let partes = data.split('/');
-        let ano = partes[2].slice(-2);
-        return partes[0].padStart(2,'0') + '/' + partes[1].padStart(2,'0') + '/' + ano;
+      // Aceita "2028-11-25 0:00:00" ou Date ou "YYYY-MM-DD"
+      let d = data;
+      if (typeof data === "string") {
+        if (data.includes(" ")) d = data.split(" ")[0];
+        if (d.match(/^\d{4}-\d{2}-\d{2}$/)) d = d + "T00:00:00";
       }
-      let d = new Date(data);
+      d = new Date(d);
       if (isNaN(d)) return data;
       let dia = String(d.getDate()).padStart(2, '0');
       let mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -223,8 +224,6 @@
       total["__isTotal"] = true;
       return total;
     }
-
-    // NOVA: Só mostra linha se tiver valor relevante em qualquer coluna (exceto chaves)
     function isLinhaComValor(row, colunasVisiveis, colunasChave) {
       return colunasVisiveis.some(col =>
         !colunasChave.includes(col) && valorNumerico(row[col]) > 0
@@ -285,6 +284,7 @@
         },
         cellClick: function(e, cell) {
           const rowData = cell.getRow().getData();
+          // Busca vencimento original: "Data Vencto."
           abrirModalHistorico(`
             <label>Fornecedor:</label> <b>${rowData["Descrição do Fornecedor/Cliente"] || "-"}</b>
             <br>
@@ -292,7 +292,7 @@
             <br>
             <label>Valor Vencido:</label> ${moedaBRLSemCentavos({getValue: ()=>rowData["VENCIDO"]})}
             <br>
-            <label>Data Vencimento Original:</label> ${formatarData(rowData["Data"])}
+            <label>Data Vencimento Original:</label> ${formatarData(rowData["Data Vencto."])}
           `);
         }
       };
@@ -330,7 +330,6 @@
       }
       colunasVisiveis = filtrarColunasUteis(dados, colunasChave);
 
-      // === FILTRA LINHAS ZERADAS ===
       dados = dados.filter(row => isLinhaComValor(row, colunasVisiveis, colunasChave));
 
       const linhaTotais = calcularLinhaTotais(dados, colunasVisiveis);
